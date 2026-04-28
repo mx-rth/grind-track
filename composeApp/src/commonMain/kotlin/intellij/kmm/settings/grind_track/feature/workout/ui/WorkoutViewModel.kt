@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import intellij.kmm.settings.grind_track.core.data.RoutineExerciseWithExercise
 import intellij.kmm.settings.grind_track.core.data.RoutineRepository
 import intellij.kmm.settings.grind_track.core.data.WorkoutRepository
+import intellij.kmm.settings.grind_track.core.notifications.RestTimerAlarm
 import intellij.kmm.settings.grind_track.core.database.entity.Routine
 import intellij.kmm.settings.grind_track.core.database.entity.WorkoutSession
 import kotlin.time.Duration.Companion.seconds
@@ -29,6 +30,13 @@ sealed interface Phase {
         val remainingSeconds: Int,
         val weightDraft: String,
         val repsDraft: String,
+        val isLogged: Boolean = false,
+    ) : Phase
+
+    data class RestingBeforeNextExercise(
+        val totalSeconds: Int,
+        val remainingSeconds: Int,
+        val nextExerciseName: String,
     ) : Phase
 }
 
@@ -66,6 +74,7 @@ private data class Position(val exerciseIndex: Int, val setIndex: Int) {
 class WorkoutViewModel(
     private val workoutRepository: WorkoutRepository,
     private val routineRepository: RoutineRepository,
+    private val restTimerAlarm: RestTimerAlarm,
 ) : ViewModel() {
 
     private val position = MutableStateFlow(Position.START)
@@ -134,6 +143,7 @@ class WorkoutViewModel(
             weightDraft = if (weightPrefill > 0.0) formatWeight(weightPrefill) else "",
             repsDraft = if (repsPrefill > 0) repsPrefill.toString() else "",
         )
+        restTimerAlarm.schedule(totalSeconds, exerciseName = exercise.exercise.name)
         startTimer(totalSeconds)
     }
 
@@ -142,10 +152,14 @@ class WorkoutViewModel(
         phase.value = resting.copy(weightDraft = weight, repsDraft = reps)
     }
 
-    /** Submit the rest form: write SetEntry, advance state machine, return to Working. */
-    fun submitRest() {
+    /**
+     * Persist the current set to the database. Stays in the Resting phase so the
+     * timer and alarm continue running — advancing is a separate action.
+     */
+    fun logSet() {
         val current = state.value as? WorkoutUiState.InSession ?: return
         val resting = current.phase as? Phase.Resting ?: return
+        if (resting.isLogged) return
         val exercise = current.currentExercise ?: return
         val weight = resting.weightDraft.toDoubleOrNull() ?: return
         val reps = resting.repsDraft.toIntOrNull()?.takeIf { it > 0 } ?: return
@@ -160,20 +174,32 @@ class WorkoutViewModel(
                 reps = reps,
             )
             lastSubmitted[exercise.routineExercise.id] = weight to reps
-            advanceFrom(current)
+            val stillResting = phase.value as? Phase.Resting ?: return@launch
+            phase.value = stillResting.copy(isLogged = true)
         }
     }
 
-    /** Skip logging this set: advance without writing a SetEntry. */
-    fun skipRest() {
+    /**
+     * End the rest and advance the state machine to the next set / exercise / finish.
+     * Cancels the in-app timer and the OS rest alarm. If the user hasn't logged the
+     * set, this also serves as "skip logging".
+     */
+    fun continueToNext() {
         val current = state.value as? WorkoutUiState.InSession ?: return
-        if (current.phase !is Phase.Resting) return
-        advanceFrom(current)
+        when (current.phase) {
+            is Phase.Resting -> advanceFrom(current)
+            is Phase.RestingBeforeNextExercise -> {
+                cancelTimerAndAlarm()
+                position.value = Position(current.currentExerciseIndex + 1, 1)
+                phase.value = Phase.Working
+            }
+            Phase.Working -> Unit
+        }
     }
 
     fun finishSession() {
         val current = state.value as? WorkoutUiState.InSession ?: return
-        cancelTimer()
+        cancelTimerAndAlarm()
         viewModelScope.launch {
             workoutRepository.finishSession(current.session.id)
             position.value = Position.START
@@ -182,16 +208,29 @@ class WorkoutViewModel(
     }
 
     private fun advanceFrom(current: WorkoutUiState.InSession) {
-        cancelTimer()
-        val totalSets = current.currentExercise?.routineExercise?.targetSets ?: return
+        cancelTimerAndAlarm()
+        val currentExercise = current.currentExercise ?: return
+        val totalSets = currentExercise.routineExercise.targetSets
         when {
             current.currentSetIndex < totalSets -> {
                 position.value = Position(current.currentExerciseIndex, current.currentSetIndex + 1)
                 phase.value = Phase.Working
             }
             current.currentExerciseIndex < current.exercises.lastIndex -> {
-                position.value = Position(current.currentExerciseIndex + 1, 1)
-                phase.value = Phase.Working
+                val nextExercise = current.exercises[current.currentExerciseIndex + 1]
+                val restSeconds = currentExercise.effectiveRestBetweenExercisesSeconds
+                if (restSeconds <= 0) {
+                    position.value = Position(current.currentExerciseIndex + 1, 1)
+                    phase.value = Phase.Working
+                } else {
+                    phase.value = Phase.RestingBeforeNextExercise(
+                        totalSeconds = restSeconds,
+                        remainingSeconds = restSeconds,
+                        nextExerciseName = nextExercise.exercise.name,
+                    )
+                    restTimerAlarm.schedule(restSeconds, exerciseName = nextExercise.exercise.name)
+                    startTimer(restSeconds)
+                }
             }
             else -> {
                 viewModelScope.launch {
@@ -210,8 +249,11 @@ class WorkoutViewModel(
             while (remaining > 0) {
                 delay(1.seconds)
                 remaining--
-                val resting = phase.value as? Phase.Resting ?: return@launch
-                phase.value = resting.copy(remainingSeconds = remaining)
+                phase.value = when (val current = phase.value) {
+                    is Phase.Resting -> current.copy(remainingSeconds = remaining)
+                    is Phase.RestingBeforeNextExercise -> current.copy(remainingSeconds = remaining)
+                    Phase.Working -> return@launch
+                }
             }
         }
     }
@@ -221,9 +263,14 @@ class WorkoutViewModel(
         timerJob = null
     }
 
+    private fun cancelTimerAndAlarm() {
+        cancelTimer()
+        restTimerAlarm.cancel()
+    }
+
     override fun onCleared() {
         super.onCleared()
-        cancelTimer()
+        cancelTimerAndAlarm()
     }
 }
 

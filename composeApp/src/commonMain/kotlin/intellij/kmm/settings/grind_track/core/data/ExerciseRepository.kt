@@ -9,8 +9,17 @@ class ExerciseRepository(
 ) {
     fun observeExercises(): Flow<List<Exercise>> = dao.observeAll()
 
-    suspend fun create(name: String, defaultRestSeconds: Int): Long =
-        dao.insert(Exercise(name = name.trim(), defaultRestSeconds = defaultRestSeconds))
+    suspend fun create(
+        name: String,
+        defaultRestSeconds: Int,
+        defaultRestBetweenExercisesSeconds: Int,
+    ): Long = dao.insert(
+        Exercise(
+            name = name.trim(),
+            defaultRestSeconds = defaultRestSeconds,
+            defaultRestBetweenExercisesSeconds = defaultRestBetweenExercisesSeconds,
+        )
+    )
 
     suspend fun update(exercise: Exercise) = dao.update(exercise)
 

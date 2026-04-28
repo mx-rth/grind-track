@@ -44,6 +44,7 @@ class RoutineRepository(
         targetSets: Int,
         targetReps: Int?,
         restSecondsOverride: Int? = null,
+        restBetweenExercisesOverride: Int? = null,
     ): Long {
         val nextPosition = routineExerciseDao.maxPosition(routineId) + 1
         return routineExerciseDao.insert(
@@ -54,6 +55,7 @@ class RoutineRepository(
                 targetSets = targetSets,
                 targetReps = targetReps,
                 restSecondsOverride = restSecondsOverride,
+                restBetweenExercisesOverride = restBetweenExercisesOverride,
             )
         )
     }

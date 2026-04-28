@@ -6,7 +6,7 @@ A Kotlin Multiplatform (Android + iOS) gym workout tracker.
 
 grind-track supports four user flows:
 
-1. **Build a routine.** Create a workout routine as an ordered sequence of exercises with target sets/reps and a per-exercise rest interval.
+1. **Build a routine.** Create a workout routine as an ordered sequence of exercises with target sets/reps (or "to failure") and a per-exercise rest interval.
 2. **Replay it.** Pick a routine and step through it set by set during a workout session.
 3. **Log sets.** When a set is marked complete, a rest timer specific to that exercise starts; during the rest the user enters the actual weight and reps performed, which is persisted as a `SetEntry`.
 4. **Track progress.** A progress screen reads the persisted history and visualises per-exercise improvement over time.

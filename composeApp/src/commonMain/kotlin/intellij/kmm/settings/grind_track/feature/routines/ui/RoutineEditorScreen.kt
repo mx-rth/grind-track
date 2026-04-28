@@ -117,11 +117,11 @@ fun RoutineEditorScreen(
         AddExerciseDialog(
             catalogue = state.catalogue,
             onDismiss = { showPicker = false },
-            onCreateExercise = { name, rest, then ->
-                viewModel.createExercise(name, rest, then)
+            onCreateExercise = { name, rest, restBetween, then ->
+                viewModel.createExercise(name, rest, restBetween, then)
             },
-            onAdd = { exerciseId, sets, reps, restOverride ->
-                viewModel.addExercise(exerciseId, sets, reps, restOverride)
+            onAdd = { exerciseId, sets, reps, restOverride, restBetweenOverride ->
+                viewModel.addExercise(exerciseId, sets, reps, restOverride, restBetweenOverride)
                 showPicker = false
             },
         )
@@ -141,6 +141,9 @@ private fun RoutineExerciseRow(
     var repsDraft by remember(re.id) { mutableStateOf(re.targetReps?.toString() ?: "") }
     var restDraft by remember(re.id) {
         mutableStateOf(re.restSecondsOverride?.toString() ?: "")
+    }
+    var restBetweenDraft by remember(re.id) {
+        mutableStateOf(re.restBetweenExercisesOverride?.toString() ?: "")
     }
     val toFailure = re.targetReps == null
 
@@ -203,6 +206,23 @@ private fun RoutineExerciseRow(
                     modifier = Modifier.weight(1f),
                 )
             }
+            NumberField(
+                label = "Rest after exercise (s)",
+                value = restBetweenDraft,
+                onValueChange = { newValue ->
+                    restBetweenDraft = newValue
+                    val parsed = newValue.toIntOrNull()
+                    if (newValue.isBlank()) {
+                        if (re.restBetweenExercisesOverride != null) {
+                            onChange(re.copy(restBetweenExercisesOverride = null))
+                        }
+                    } else if (parsed != null && parsed >= 0 && parsed != re.restBetweenExercisesOverride) {
+                        onChange(re.copy(restBetweenExercisesOverride = parsed))
+                    }
+                },
+                placeholder = "${item.exercise.defaultRestBetweenExercisesSeconds}",
+                modifier = Modifier.fillMaxWidth(),
+            )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(
                     checked = toFailure,
@@ -252,8 +272,8 @@ private fun NumberField(
 private fun AddExerciseDialog(
     catalogue: List<Exercise>,
     onDismiss: () -> Unit,
-    onCreateExercise: (name: String, defaultRest: Int, onCreated: (Long) -> Unit) -> Unit,
-    onAdd: (exerciseId: Long, sets: Int, reps: Int?, restOverride: Int?) -> Unit,
+    onCreateExercise: (name: String, defaultRest: Int, defaultRestBetween: Int, onCreated: (Long) -> Unit) -> Unit,
+    onAdd: (exerciseId: Long, sets: Int, reps: Int?, restOverride: Int?, restBetweenOverride: Int?) -> Unit,
 ) {
     var step by remember { mutableStateOf<PickerStep>(PickerStep.List) }
 
@@ -304,15 +324,15 @@ private fun AddExerciseDialog(
                 is PickerStep.Configure -> ConfigureExerciseForm(
                     exercise = current.exercise,
                     onCancel = { step = PickerStep.List },
-                    onAdd = { sets, reps, restOverride ->
-                        onAdd(current.exercise.id, sets, reps, restOverride)
+                    onAdd = { sets, reps, restOverride, restBetweenOverride ->
+                        onAdd(current.exercise.id, sets, reps, restOverride, restBetweenOverride)
                     },
                 )
                 PickerStep.Create -> CreateExerciseForm(
                     onCancel = { step = PickerStep.List },
-                    onCreateAndAdd = { name, rest, sets, reps ->
-                        onCreateExercise(name, rest) { newId ->
-                            onAdd(newId, sets, reps, null)
+                    onCreateAndAdd = { name, rest, restBetween, sets, reps ->
+                        onCreateExercise(name, rest, restBetween) { newId ->
+                            onAdd(newId, sets, reps, null, null)
                         }
                     },
                 )
@@ -331,12 +351,13 @@ private sealed class PickerStep {
 private fun ConfigureExerciseForm(
     exercise: Exercise,
     onCancel: () -> Unit,
-    onAdd: (sets: Int, reps: Int?, restOverride: Int?) -> Unit,
+    onAdd: (sets: Int, reps: Int?, restOverride: Int?, restBetweenOverride: Int?) -> Unit,
 ) {
     var sets by remember { mutableStateOf("3") }
     var reps by remember { mutableStateOf("8") }
     var toFailure by remember { mutableStateOf(false) }
     var rest by remember { mutableStateOf("") }
+    var restBetween by remember { mutableStateOf("") }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             NumberField("Sets", sets, { sets = it }, modifier = Modifier.weight(1f))
@@ -360,6 +381,13 @@ private fun ConfigureExerciseForm(
             placeholder = "${exercise.defaultRestSeconds}",
             modifier = Modifier.fillMaxWidth(),
         )
+        NumberField(
+            label = "Rest after exercise (s)",
+            value = restBetween,
+            onValueChange = { restBetween = it },
+            placeholder = "${exercise.defaultRestBetweenExercisesSeconds}",
+            modifier = Modifier.fillMaxWidth(),
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(onClick = onCancel) { Text("Back") }
             Button(
@@ -369,7 +397,8 @@ private fun ConfigureExerciseForm(
                     val s = sets.toInt()
                     val r = if (toFailure) null else reps.toInt()
                     val ro = rest.toIntOrNull()?.takeIf { it > 0 }
-                    onAdd(s, r, ro)
+                    val rbo = restBetween.toIntOrNull()?.takeIf { it >= 0 }
+                    onAdd(s, r, ro, rbo)
                 },
             ) { Text("Add") }
         }
@@ -379,10 +408,11 @@ private fun ConfigureExerciseForm(
 @Composable
 private fun CreateExerciseForm(
     onCancel: () -> Unit,
-    onCreateAndAdd: (name: String, defaultRest: Int, sets: Int, reps: Int?) -> Unit,
+    onCreateAndAdd: (name: String, defaultRest: Int, defaultRestBetween: Int, sets: Int, reps: Int?) -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
     var rest by remember { mutableStateOf("90") }
+    var restBetween by remember { mutableStateOf("180") }
     var sets by remember { mutableStateOf("3") }
     var reps by remember { mutableStateOf("8") }
     var toFailure by remember { mutableStateOf(false) }
@@ -398,6 +428,12 @@ private fun CreateExerciseForm(
             label = "Default rest (s)",
             value = rest,
             onValueChange = { rest = it },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        NumberField(
+            label = "Default rest after exercise (s)",
+            value = restBetween,
+            onValueChange = { restBetween = it },
             modifier = Modifier.fillMaxWidth(),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -420,11 +456,12 @@ private fun CreateExerciseForm(
             Button(
                 enabled = name.isNotBlank() &&
                     rest.toIntOrNull()?.let { it > 0 } == true &&
+                    restBetween.toIntOrNull()?.let { it >= 0 } == true &&
                     sets.toIntOrNull()?.let { it > 0 } == true &&
                     (toFailure || reps.toIntOrNull()?.let { it > 0 } == true),
                 onClick = {
                     val resolvedReps = if (toFailure) null else reps.toInt()
-                    onCreateAndAdd(name.trim(), rest.toInt(), sets.toInt(), resolvedReps)
+                    onCreateAndAdd(name.trim(), rest.toInt(), restBetween.toInt(), sets.toInt(), resolvedReps)
                 },
             ) { Text("Create & add") }
         }

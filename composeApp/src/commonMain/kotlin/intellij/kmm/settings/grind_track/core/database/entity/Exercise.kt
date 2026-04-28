@@ -9,4 +9,5 @@ data class Exercise(
     val name: String,
     val notes: String = "",
     val defaultRestSeconds: Int = 90,
+    val defaultRestBetweenExercisesSeconds: Int = 180,
 )
