@@ -4,6 +4,7 @@ import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import intellij.kmm.settings.grind_track.core.data.ExerciseRepository
 import intellij.kmm.settings.grind_track.core.data.ProgressRepository
 import intellij.kmm.settings.grind_track.core.data.RoutineRepository
+import intellij.kmm.settings.grind_track.core.data.SeedDataManager
 import intellij.kmm.settings.grind_track.core.data.WorkoutRepository
 import intellij.kmm.settings.grind_track.core.database.DatabaseFactory
 import intellij.kmm.settings.grind_track.core.database.GymTrackDatabase
@@ -11,7 +12,9 @@ import intellij.kmm.settings.grind_track.feature.progress.ui.ProgressViewModel
 import intellij.kmm.settings.grind_track.feature.routines.ui.RoutineEditorViewModel
 import intellij.kmm.settings.grind_track.feature.routines.ui.RoutinesViewModel
 import intellij.kmm.settings.grind_track.feature.workout.ui.WorkoutViewModel
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
@@ -37,6 +40,7 @@ val appModule: Module = module {
     single { ExerciseRepository(get()) }
     single { WorkoutRepository(get(), get()) }
     single { ProgressRepository(get()) }
+    single { SeedDataManager(get(), get(), get(), get(), get()) }
 
     viewModel { RoutinesViewModel(get()) }
     viewModel { (routineId: Long) -> RoutineEditorViewModel(routineId, get(), get()) }
@@ -51,5 +55,8 @@ fun initKoin(config: KoinAppDeclaration? = null) {
     startKoin {
         config?.invoke(this)
         modules(appModule, platformModule())
+    }
+    CoroutineScope(Dispatchers.Default).launch {
+        KoinPlatformTools.defaultContext().get().get<SeedDataManager>().seedIfEmpty()
     }
 }

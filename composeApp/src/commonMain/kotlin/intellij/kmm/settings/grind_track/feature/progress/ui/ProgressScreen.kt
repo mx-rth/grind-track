@@ -1,5 +1,6 @@
 package intellij.kmm.settings.grind_track.feature.progress.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -7,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -23,11 +25,24 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import intellij.kmm.settings.grind_track.core.database.entity.Exercise
 import intellij.kmm.settings.grind_track.core.database.entity.SetEntry
 import intellij.kmm.settings.grind_track.core.designsystem.EmptyState
+import kotlin.math.roundToInt
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import org.koin.compose.viewmodel.koinViewModel
@@ -107,11 +122,35 @@ private fun HistoryList(history: List<SetEntry>) {
     val grouped = history.groupBy { entry ->
         entry.completedAt.toLocalDateTime(timeZone).date
     }
+    val sessionGroups = history
+        .groupBy { it.sessionId }
+        .entries
+        .sortedBy { (_, entries) -> entries.minOf { it.completedAt } }
+    val dateOccurrences = mutableMapOf<LocalDate, Int>()
+    val sessionLabels: List<String> = sessionGroups.map { (_, entries) ->
+        val date = entries.first().completedAt.toLocalDateTime(timeZone).date
+        val count = (dateOccurrences[date] ?: 0) + 1
+        dateOccurrences[date] = count
+        if (count == 1) shortDate(date) else "${shortDate(date)} ($count)"
+    }
+    val weightBySession: List<Pair<String, Double>> = sessionGroups.mapIndexed { i, (_, entries) ->
+        sessionLabels[i] to entries.maxOf { it.weight }
+    }
+    val repsBySession: List<Pair<String, Int>> = sessionGroups.mapIndexed { i, (_, entries) ->
+        sessionLabels[i] to entries.sumOf { it.reps }
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        item(key = "weight_chart") {
+            WeightProgressionChart(dataPoints = weightBySession)
+        }
+        item(key = "reps_chart") {
+            RepsBarChart(dataPoints = repsBySession)
+        }
         grouped.forEach { (date, entries) ->
             item(key = date.toString()) {
                 ElevatedCard(modifier = Modifier.fillMaxWidth()) {
@@ -123,6 +162,162 @@ private fun HistoryList(history: List<SetEntry>) {
                         entries.forEachIndexed { idx, entry ->
                             SetEntryRow(index = idx + 1, entry = entry)
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeightProgressionChart(dataPoints: List<Pair<String, Double>>) {
+    val textMeasurer = rememberTextMeasurer()
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val outlineVariantColor = MaterialTheme.colorScheme.outlineVariant
+
+    val n = dataPoints.size
+    val maxW = if (n > 0) dataPoints.maxOf { it.second } else 0.0
+    val minW = if (n > 0) dataPoints.minOf { it.second } else 0.0
+    val rangePad = if (maxW == minW) 10.0 else (maxW - minW) * 0.15
+    val displayMin = (minW - rangePad).coerceAtLeast(0.0)
+    val displayMax = maxW + rangePad
+    val range = (displayMax - displayMin).coerceAtLeast(0.001)
+
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Weight Progression", style = MaterialTheme.typography.titleSmall)
+            Canvas(modifier = Modifier.fillMaxWidth().height(150.dp)) {
+                val leftPad = 52.dp.toPx()
+                val rightPad = 12.dp.toPx()
+                val topPad = 4.dp.toPx()
+                val bottomPad = 28.dp.toPx()
+                val cw = size.width - leftPad - rightPad
+                val ch = size.height - topPad - bottomPad
+
+                // Y-axis gridlines and labels
+                for (i in 0..3) {
+                    val frac = i.toFloat() / 3f
+                    val y = topPad + ch * (1f - frac)
+                    drawLine(
+                        color = outlineVariantColor.copy(alpha = 0.5f),
+                        start = Offset(leftPad, y),
+                        end = Offset(leftPad + cw, y),
+                        strokeWidth = 1f,
+                    )
+                    val labelText = (displayMin + range * frac).roundToInt().toString()
+                    val measured = textMeasurer.measure(labelText, TextStyle(fontSize = 9.sp))
+                    drawText(
+                        measured,
+                        color = onSurfaceVariantColor,
+                        topLeft = Offset(leftPad - measured.size.width - 4.dp.toPx(), y - measured.size.height / 2f),
+                    )
+                }
+
+                // X positions
+                val xs = if (n <= 1) {
+                    FloatArray(n) { leftPad + cw / 2f }
+                } else {
+                    FloatArray(n) { i -> leftPad + i.toFloat() / (n - 1).toFloat() * cw }
+                }
+
+                // X-axis labels (up to 5)
+                val labelStep = ((n.toFloat() / 5f).coerceAtLeast(1f)).toInt()
+                for (i in 0 until n step labelStep) {
+                    val measured = textMeasurer.measure(dataPoints[i].first, TextStyle(fontSize = 9.sp))
+                    drawText(
+                        measured,
+                        color = onSurfaceVariantColor,
+                        topLeft = Offset(xs[i] - measured.size.width / 2f, topPad + ch + 4.dp.toPx()),
+                    )
+                }
+
+                // Line
+                if (n > 1) {
+                    val path = Path()
+                    for (i in 0 until n) {
+                        val frac = ((dataPoints[i].second - displayMin) / range).toFloat().coerceIn(0f, 1f)
+                        val y = topPad + ch * (1f - frac)
+                        if (i == 0) path.moveTo(xs[i], y) else path.lineTo(xs[i], y)
+                    }
+                    drawPath(path, primaryColor, style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round))
+                }
+
+                // Dots
+                for (i in 0 until n) {
+                    val frac = ((dataPoints[i].second - displayMin) / range).toFloat().coerceIn(0f, 1f)
+                    val y = topPad + ch * (1f - frac)
+                    drawCircle(primaryColor, radius = 4.dp.toPx(), center = Offset(xs[i], y))
+                    drawCircle(Color.White, radius = 2.dp.toPx(), center = Offset(xs[i], y))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RepsBarChart(dataPoints: List<Pair<String, Int>>) {
+    val textMeasurer = rememberTextMeasurer()
+    val secondaryColor = MaterialTheme.colorScheme.secondary
+    val onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val outlineVariantColor = MaterialTheme.colorScheme.outlineVariant
+
+    val n = dataPoints.size
+    val maxReps = if (n > 0) dataPoints.maxOf { it.second } else 0
+    val displayMax = (maxReps * 1.15f).coerceAtLeast(1f)
+
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Reps per Session", style = MaterialTheme.typography.titleSmall)
+            Canvas(modifier = Modifier.fillMaxWidth().height(130.dp)) {
+                val leftPad = 52.dp.toPx()
+                val rightPad = 12.dp.toPx()
+                val topPad = 4.dp.toPx()
+                val bottomPad = 28.dp.toPx()
+                val cw = size.width - leftPad - rightPad
+                val ch = size.height - topPad - bottomPad
+
+                // Y-axis gridlines and labels
+                for (i in 0..3) {
+                    val frac = i.toFloat() / 3f
+                    val y = topPad + ch * (1f - frac)
+                    drawLine(
+                        color = outlineVariantColor.copy(alpha = 0.5f),
+                        start = Offset(leftPad, y),
+                        end = Offset(leftPad + cw, y),
+                        strokeWidth = 1f,
+                    )
+                    val labelText = "${(displayMax * frac).toInt()}"
+                    val measured = textMeasurer.measure(labelText, TextStyle(fontSize = 9.sp))
+                    drawText(
+                        measured,
+                        color = onSurfaceVariantColor,
+                        topLeft = Offset(leftPad - measured.size.width - 4.dp.toPx(), y - measured.size.height / 2f),
+                    )
+                }
+
+                // Bars and X-axis labels
+                val slotWidth = cw / n.coerceAtLeast(1)
+                val barWidth = slotWidth * 0.6f
+                val labelStep = ((n.toFloat() / 5f).coerceAtLeast(1f)).toInt()
+
+                for (i in 0 until n) {
+                    val cx = leftPad + i * slotWidth + slotWidth / 2f
+                    val frac = (dataPoints[i].second.toFloat() / displayMax).coerceIn(0f, 1f)
+                    val barHeight = (ch * frac).coerceAtLeast(2.dp.toPx())
+                    drawRoundRect(
+                        color = secondaryColor,
+                        topLeft = Offset(cx - barWidth / 2f, topPad + ch - barHeight),
+                        size = Size(barWidth, barHeight),
+                        cornerRadius = CornerRadius(3.dp.toPx()),
+                    )
+                    if (i % labelStep == 0) {
+                        val measured = textMeasurer.measure(dataPoints[i].first, TextStyle(fontSize = 9.sp))
+                        drawText(
+                            measured,
+                            color = onSurfaceVariantColor,
+                            topLeft = Offset(cx - measured.size.width / 2f, topPad + ch + 4.dp.toPx()),
+                        )
                     }
                 }
             }
@@ -152,7 +347,12 @@ private fun SetEntryRow(index: Int, entry: SetEntry) {
 private fun formatWeight(weight: Double): String =
     if (weight % 1.0 == 0.0) weight.toLong().toString() else weight.toString()
 
-private fun formatDate(date: kotlinx.datetime.LocalDate): String {
+private fun formatDate(date: LocalDate): String {
     val month = date.month.name.lowercase().replaceFirstChar { it.uppercase() }
     return "$month ${date.day}, ${date.year}"
+}
+
+private fun shortDate(date: LocalDate): String {
+    val month = date.month.name.take(3).lowercase().replaceFirstChar { it.uppercase() }
+    return "$month ${date.day}"
 }
