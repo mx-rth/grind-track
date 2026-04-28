@@ -22,6 +22,7 @@ kotlinxDatetime = "0.7.1"
 kotlinxCoroutines = "1.10.2"
 turbine = "1.2.0"
 materialIcons = "1.7.3"
+glance = "1.1.1"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -62,6 +63,10 @@ androidx-navigation-compose = { module = "org.jetbrains.androidx.navigation:navi
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinxDatetime" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
+
+# Glance (Android Widgets)
+androidx-glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "glance" }
+androidx-glance-material3 = { module = "androidx.glance:glance-material3", version.ref = "glance" }
 
 # Test
 turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }

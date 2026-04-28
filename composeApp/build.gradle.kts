@@ -31,6 +31,7 @@ kotlin {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.androidx.activity.compose)
             implementation(libs.koin.android)
+            implementation(libs.androidx.glance.appwidget)
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)

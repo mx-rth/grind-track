@@ -65,7 +65,7 @@ fun ProgressScreen(
             TopAppBar(
                 title = { Text("Progress") },
                 actions = {
-                    if (!state.isLoading && state.streak > 0) {
+                    if (!state.isLoading) {
                         Row(
                             modifier = Modifier.padding(end = 16.dp),
                             verticalAlignment = Alignment.CenterVertically,
