@@ -1,0 +1,7 @@
+TEAM_ID=
+
+PRODUCT_NAME=grind-track
+PRODUCT_BUNDLE_IDENTIFIER=intellij.kmm.settings.grind_track.grind-track$(TEAM_ID)
+
+CURRENT_PROJECT_VERSION=1
+MARKETING_VERSION=1.0
