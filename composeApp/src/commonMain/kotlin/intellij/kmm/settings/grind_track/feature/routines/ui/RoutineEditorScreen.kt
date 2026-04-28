@@ -28,9 +28,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberTimePickerState
 import kotlinx.datetime.DayOfWeek
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -90,6 +93,13 @@ fun RoutineEditorScreen(
                     selected = routine.scheduledDays,
                     onToggle = viewModel::toggleScheduledDay,
                 )
+                NotificationToggleRow(
+                    enabled = routine.notificationEnabled,
+                    minuteOfDay = routine.notificationMinuteOfDay,
+                    hasScheduledDays = routine.scheduledDays.isNotEmpty(),
+                    onToggleEnabled = viewModel::setNotificationEnabled,
+                    onPickTime = viewModel::setNotificationTime,
+                )
             }
 
             Box(modifier = Modifier.weight(1f)) {
@@ -133,6 +143,95 @@ fun RoutineEditorScreen(
             },
         )
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NotificationToggleRow(
+    enabled: Boolean,
+    minuteOfDay: Int?,
+    hasScheduledDays: Boolean,
+    onToggleEnabled: (Boolean) -> Unit,
+    onPickTime: (Int) -> Unit,
+) {
+    var showPicker by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Reminder notification",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+            )
+            Switch(checked = enabled, onCheckedChange = onToggleEnabled)
+        }
+        if (enabled) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Time: ${formatMinuteOfDay(minuteOfDay)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { showPicker = true }) {
+                    Text(if (minuteOfDay == null) "Set time" else "Change")
+                }
+            }
+            if (!hasScheduledDays) {
+                Text(
+                    text = "Pick training days above to receive reminders.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+    if (showPicker) {
+        TimePickDialog(
+            initialMinuteOfDay = minuteOfDay ?: 480,
+            onDismiss = { showPicker = false },
+            onConfirm = { picked ->
+                onPickTime(picked)
+                showPicker = false
+            },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TimePickDialog(
+    initialMinuteOfDay: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit,
+) {
+    val tps = rememberTimePickerState(
+        initialHour = initialMinuteOfDay / 60,
+        initialMinute = initialMinuteOfDay % 60,
+        is24Hour = true,
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = { onConfirm(tps.hour * 60 + tps.minute) }) { Text("OK") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        title = { Text("Reminder time") },
+        text = { TimePicker(state = tps) },
+    )
+}
+
+private fun formatMinuteOfDay(minuteOfDay: Int?): String {
+    if (minuteOfDay == null) return "Not set"
+    val h = minuteOfDay / 60
+    val m = minuteOfDay % 60
+    val mm = if (m < 10) "0$m" else m.toString()
+    val hh = if (h < 10) "0$h" else h.toString()
+    return "$hh:$mm"
 }
 
 @Composable

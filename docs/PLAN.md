@@ -33,6 +33,13 @@ All four milestones of the original plan are implemented; `./gradlew :composeApp
 - A `LazyRow` of `FilterChip`s lists every exercise that has at least one logged set, ordered most-recent first; the most-recent exercise is selected by default and the user can switch.
 - Per-day grouped history list. Each day is an `ElevatedCard` with a `Month D, YYYY` heading, then rows like `Set N    W × R`.
 
+### Routine reminders
+- Optional per-routine notification reminder. Two new fields on `Routine`: `notificationEnabled: Boolean` and `notificationMinuteOfDay: Int?` (minutes since midnight). The reminder fires only on the routine's `scheduledDays`.
+- Wired into the existing routine editor: a `Switch` "Reminder notification" + a `TimePicker` dialog (material3) for choosing the time. Helper text prompts the user to pick training days when none are set.
+- A common `RoutineNotificationsCoordinator` started in `initKoin` collects `RoutineRepository.observeRoutines()` and re-syncs the platform `RoutineNotificationScheduler` on every emit. This keeps notifications reactive to renames, schedule changes, time changes, toggle changes, and deletions without scattering scheduling calls.
+- **Android**: one `AlarmManager.setExactAndAllowWhileIdle` per (routineId, dayOfWeek). Re-armed in `RoutineReminderReceiver` after each fire (next-week occurrence). The set of currently-scheduled (id, day) tuples is persisted in `SharedPreferences` so orphans (notifications scheduled before a process death where the routine has since been disabled/deleted) get cancelled on the next sync. New `routine_reminders` channel (default importance, default sound). `RoutineReminderBootReceiver` re-arms after `BOOT_COMPLETED` / `TIMEZONE_CHANGED`. New `RECEIVE_BOOT_COMPLETED` permission.
+- **iOS**: one `UNCalendarNotificationTrigger` per (routineId, dayOfWeek) with `repeats = true`. Identifiers are prefixed `routine_<id>_day_<ordinal>`. iOS handles reboot/timezone natively. Authorization is shared with the rest-timer alarm.
+
 ### Settings (custom notification sound)
 - Reachable via a gear `IconButton` in the Routines tab top bar (no new bottom-nav tab). Single screen with a "Notification sound" section: shows the current sound (filename or "Default alarm tone"), a "Pick a .wav file" button, and a "Reset to default" button.
 - File picker: `@Composable expect fun rememberSoundFilePicker` — Android uses `rememberLauncherForActivityResult(OpenDocument())` filtered to `audio/wav`; iOS uses `LocalUIViewController` to present `UIDocumentPickerViewController` with `UTType.wav`.

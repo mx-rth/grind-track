@@ -41,6 +41,14 @@ class RoutineRepository(
         routineDao.update(routine.copy(scheduledDays = days))
     }
 
+    suspend fun setNotificationEnabled(routine: Routine, enabled: Boolean) {
+        routineDao.update(routine.copy(notificationEnabled = enabled))
+    }
+
+    suspend fun setNotificationMinuteOfDay(routine: Routine, minute: Int?) {
+        routineDao.update(routine.copy(notificationMinuteOfDay = minute))
+    }
+
     suspend fun deleteRoutine(id: Long) = routineDao.deleteById(id)
 
     suspend fun addExerciseToRoutine(

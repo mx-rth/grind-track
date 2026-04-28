@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 5,
-    "identityHash": "3a49d5936566928cca27c338494be9aa",
+    "identityHash": "9b542e24da99574820d22d2968279976",
     "entities": [
       {
         "tableName": "exercise",
@@ -48,7 +48,7 @@
       },
       {
         "tableName": "routine",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `scheduledDays` TEXT NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `scheduledDays` TEXT NOT NULL, `notificationEnabled` INTEGER NOT NULL, `notificationMinuteOfDay` INTEGER)",
         "fields": [
           {
             "fieldPath": "id",
@@ -73,6 +73,17 @@
             "columnName": "scheduledDays",
             "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "notificationEnabled",
+            "columnName": "notificationEnabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notificationMinuteOfDay",
+            "columnName": "notificationMinuteOfDay",
+            "affinity": "INTEGER"
           }
         ],
         "primaryKey": {
@@ -342,7 +353,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '3a49d5936566928cca27c338494be9aa')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '9b542e24da99574820d22d2968279976')"
     ]
   }
 }

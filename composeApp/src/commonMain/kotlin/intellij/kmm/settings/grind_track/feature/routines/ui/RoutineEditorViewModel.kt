@@ -53,6 +53,18 @@ class RoutineEditorViewModel(
         viewModelScope.launch { routineRepository.setScheduledDays(current, newDays) }
     }
 
+    fun setNotificationEnabled(enabled: Boolean) {
+        val current = state.value.routine ?: return
+        if (current.notificationEnabled == enabled) return
+        viewModelScope.launch { routineRepository.setNotificationEnabled(current, enabled) }
+    }
+
+    fun setNotificationTime(minuteOfDay: Int) {
+        val current = state.value.routine ?: return
+        if (current.notificationMinuteOfDay == minuteOfDay) return
+        viewModelScope.launch { routineRepository.setNotificationMinuteOfDay(current, minuteOfDay) }
+    }
+
     fun addExercise(
         exerciseId: Long,
         targetSets: Int,

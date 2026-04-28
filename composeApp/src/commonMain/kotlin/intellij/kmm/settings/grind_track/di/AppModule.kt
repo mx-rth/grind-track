@@ -8,6 +8,7 @@ import intellij.kmm.settings.grind_track.core.data.SeedDataManager
 import intellij.kmm.settings.grind_track.core.data.WorkoutRepository
 import intellij.kmm.settings.grind_track.core.database.DatabaseFactory
 import intellij.kmm.settings.grind_track.core.database.GymTrackDatabase
+import intellij.kmm.settings.grind_track.core.notifications.RoutineNotificationsCoordinator
 import intellij.kmm.settings.grind_track.feature.progress.ui.ProgressViewModel
 import intellij.kmm.settings.grind_track.feature.routines.ui.RoutineEditorViewModel
 import intellij.kmm.settings.grind_track.feature.routines.ui.RoutinesViewModel
@@ -42,6 +43,13 @@ val appModule: Module = module {
     single { WorkoutRepository(get(), get()) }
     single { ProgressRepository(get(), get(), get()) }
     single { SeedDataManager(get(), get(), get(), get(), get()) }
+    single {
+        RoutineNotificationsCoordinator(
+            repository = get(),
+            scheduler = get(),
+            scope = CoroutineScope(Dispatchers.Default),
+        )
+    }
 
     viewModel { RoutinesViewModel(get()) }
     viewModel { (routineId: Long) -> RoutineEditorViewModel(routineId, get(), get()) }
@@ -61,4 +69,6 @@ fun initKoin(config: KoinAppDeclaration? = null) {
     CoroutineScope(Dispatchers.Default).launch {
         KoinPlatformTools.defaultContext().get().get<SeedDataManager>().seedIfEmpty()
     }
+    // Eagerly resolve so the coordinator starts collecting routines immediately.
+    KoinPlatformTools.defaultContext().get().get<RoutineNotificationsCoordinator>()
 }

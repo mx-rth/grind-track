@@ -12,6 +12,7 @@ import androidx.core.content.getSystemService
 
 internal const val REST_TIMER_CHANNEL_ID = "rest_timer_alarm"
 internal const val REST_TIMER_CUSTOM_CHANNEL_PREFIX = "rest_timer_alarm_custom_"
+internal const val ROUTINE_REMINDER_CHANNEL_ID = "routine_reminders"
 
 internal fun customRestTimerChannelId(generation: Int): String =
     "$REST_TIMER_CUSTOM_CHANNEL_PREFIX$generation"
@@ -80,4 +81,21 @@ fun deleteCustomRestTimerChannel(context: Context, generation: Int) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
     val manager = context.getSystemService<NotificationManager>() ?: return
     manager.deleteNotificationChannel(customRestTimerChannelId(generation))
+}
+
+/** Channel for the per-routine workout reminder. Default importance, default sound. */
+fun ensureRoutineReminderChannel(context: Context) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+    val manager = context.getSystemService<NotificationManager>() ?: return
+    if (manager.getNotificationChannel(ROUTINE_REMINDER_CHANNEL_ID) != null) return
+
+    val channel = NotificationChannel(
+        ROUTINE_REMINDER_CHANNEL_ID,
+        "Routine reminders",
+        NotificationManager.IMPORTANCE_DEFAULT,
+    ).apply {
+        description = "Reminders to start your scheduled workouts."
+        enableVibration(true)
+    }
+    manager.createNotificationChannel(channel)
 }

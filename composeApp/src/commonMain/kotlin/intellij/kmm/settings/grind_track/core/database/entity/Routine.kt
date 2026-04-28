@@ -11,4 +11,6 @@ data class Routine(
     val name: String,
     val createdAt: Instant,
     val scheduledDays: Set<DayOfWeek> = emptySet(),
+    val notificationEnabled: Boolean = false,
+    val notificationMinuteOfDay: Int? = null,
 )
