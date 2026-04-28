@@ -16,11 +16,13 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -29,6 +31,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import kotlinx.datetime.DayOfWeek
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -83,6 +86,10 @@ fun RoutineEditorScreen(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                ScheduleDayPicker(
+                    selected = routine.scheduledDays,
+                    onToggle = viewModel::toggleScheduledDay,
+                )
             }
 
             Box(modifier = Modifier.weight(1f)) {
@@ -125,6 +132,41 @@ fun RoutineEditorScreen(
                 showPicker = false
             },
         )
+    }
+}
+
+@Composable
+private fun ScheduleDayPicker(
+    selected: Set<DayOfWeek>,
+    onToggle: (DayOfWeek) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = "Training days",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            items(DayOfWeek.entries) { day ->
+                FilterChip(
+                    selected = day in selected,
+                    onClick = { onToggle(day) },
+                    label = {
+                        Text(
+                            text = when (day) {
+                                DayOfWeek.MONDAY -> "Mo"
+                                DayOfWeek.TUESDAY -> "Tu"
+                                DayOfWeek.WEDNESDAY -> "We"
+                                DayOfWeek.THURSDAY -> "Th"
+                                DayOfWeek.FRIDAY -> "Fr"
+                                DayOfWeek.SATURDAY -> "Sa"
+                                DayOfWeek.SUNDAY -> "Su"
+                            },
+                        )
+                    },
+                )
+            }
+        }
     }
 }
 

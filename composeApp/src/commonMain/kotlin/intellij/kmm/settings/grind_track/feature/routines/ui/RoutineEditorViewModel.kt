@@ -8,6 +8,7 @@ import intellij.kmm.settings.grind_track.core.data.RoutineRepository
 import intellij.kmm.settings.grind_track.core.database.entity.Exercise
 import intellij.kmm.settings.grind_track.core.database.entity.Routine
 import intellij.kmm.settings.grind_track.core.database.entity.RoutineExercise
+import kotlinx.datetime.DayOfWeek
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -43,6 +44,13 @@ class RoutineEditorViewModel(
         val current = state.value.routine ?: return
         if (current.name == newName) return
         viewModelScope.launch { routineRepository.renameRoutine(current, newName) }
+    }
+
+    fun toggleScheduledDay(day: DayOfWeek) {
+        val current = state.value.routine ?: return
+        val newDays = if (day in current.scheduledDays) current.scheduledDays - day
+                      else current.scheduledDays + day
+        viewModelScope.launch { routineRepository.setScheduledDays(current, newDays) }
     }
 
     fun addExercise(

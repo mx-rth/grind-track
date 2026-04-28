@@ -24,10 +24,10 @@ import intellij.kmm.settings.grind_track.core.database.entity.WorkoutSession
         WorkoutSession::class,
         SetEntry::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
-@TypeConverters(InstantTypeConverter::class)
+@TypeConverters(InstantTypeConverter::class, DayOfWeekTypeConverter::class)
 @ConstructedBy(GymTrackDatabaseConstructor::class)
 abstract class GymTrackDatabase : RoomDatabase() {
     abstract fun exerciseDao(): ExerciseDao

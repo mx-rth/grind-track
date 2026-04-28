@@ -6,6 +6,7 @@ import intellij.kmm.settings.grind_track.core.database.dao.RoutineExerciseDao
 import intellij.kmm.settings.grind_track.core.database.entity.Routine
 import intellij.kmm.settings.grind_track.core.database.entity.RoutineExercise
 import kotlin.time.Clock
+import kotlinx.datetime.DayOfWeek
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 
@@ -34,6 +35,10 @@ class RoutineRepository(
 
     suspend fun renameRoutine(routine: Routine, name: String) {
         routineDao.update(routine.copy(name = name.trim()))
+    }
+
+    suspend fun setScheduledDays(routine: Routine, days: Set<DayOfWeek>) {
+        routineDao.update(routine.copy(scheduledDays = days))
     }
 
     suspend fun deleteRoutine(id: Long) = routineDao.deleteById(id)
