@@ -50,6 +50,7 @@ class RoutineEditorViewModel(
         targetSets: Int,
         targetReps: Int?,
         restSecondsOverride: Int?,
+        restBetweenExercisesOverride: Int?,
     ) {
         viewModelScope.launch {
             routineRepository.addExerciseToRoutine(
@@ -58,6 +59,7 @@ class RoutineEditorViewModel(
                 targetSets = targetSets,
                 targetReps = targetReps,
                 restSecondsOverride = restSecondsOverride,
+                restBetweenExercisesOverride = restBetweenExercisesOverride,
             )
         }
     }
@@ -78,10 +80,19 @@ class RoutineEditorViewModel(
         viewModelScope.launch { routineRepository.moveDown(id) }
     }
 
-    fun createExercise(name: String, defaultRestSeconds: Int, onCreated: (Long) -> Unit) {
+    fun createExercise(
+        name: String,
+        defaultRestSeconds: Int,
+        defaultRestBetweenExercisesSeconds: Int,
+        onCreated: (Long) -> Unit,
+    ) {
         if (name.isBlank()) return
         viewModelScope.launch {
-            val id = exerciseRepository.create(name, defaultRestSeconds)
+            val id = exerciseRepository.create(
+                name = name,
+                defaultRestSeconds = defaultRestSeconds,
+                defaultRestBetweenExercisesSeconds = defaultRestBetweenExercisesSeconds,
+            )
             onCreated(id)
         }
     }

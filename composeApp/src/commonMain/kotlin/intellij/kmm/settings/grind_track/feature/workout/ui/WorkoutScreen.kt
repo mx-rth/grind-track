@@ -137,45 +137,105 @@ private fun InSessionContent(
         EmptyExerciseList(onFinish = onFinish)
         return
     }
+    when (val phase = state.phase) {
+        is Phase.RestingBeforeNextExercise -> RestingBeforeNextExerciseContent(
+            phase = phase,
+            onContinue = onContinueToNext,
+            onFinish = onFinish,
+        )
+        Phase.Working,
+        is Phase.Resting -> Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                text = "Exercise ${state.currentExerciseIndex + 1} of ${state.exercises.size}",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = current.exercise.name,
+                style = MaterialTheme.typography.headlineMedium,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = "Set ${state.currentSetIndex} of ${current.routineExercise.targetSets}",
+                style = MaterialTheme.typography.titleLarge,
+            )
+            Text(
+                text = repsLabel(current),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+
+            Box(modifier = Modifier.weight(1f)) {
+                when (phase) {
+                    Phase.Working -> WorkingControls(
+                        restSeconds = current.effectiveRestSeconds,
+                        onMarkSetComplete = onMarkSetComplete,
+                        onFinish = onFinish,
+                    )
+                    is Phase.Resting -> RestingControls(
+                        phase = phase,
+                        onUpdateForm = onUpdateRestForm,
+                        onLogSet = onLogSet,
+                        onContinue = onContinueToNext,
+                    )
+                    is Phase.RestingBeforeNextExercise -> Unit
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RestingBeforeNextExerciseContent(
+    phase: Phase.RestingBeforeNextExercise,
+    onContinue: () -> Unit,
+    onFinish: () -> Unit,
+) {
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(
-            text = "Exercise ${state.currentExerciseIndex + 1} of ${state.exercises.size}",
+            text = "Up next",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            text = current.exercise.name,
+            text = phase.nextExerciseName,
             style = MaterialTheme.typography.headlineMedium,
             textAlign = TextAlign.Center,
         )
+        val timerLabel = if (phase.remainingSeconds > 0) {
+            "Rest: ${phase.remainingSeconds}s"
+        } else {
+            "Rest complete"
+        }
         Text(
-            text = "Set ${state.currentSetIndex} of ${current.routineExercise.targetSets}",
+            text = timerLabel,
             style = MaterialTheme.typography.titleLarge,
-        )
-        Text(
-            text = repsLabel(current),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary,
+            color = if (phase.remainingSeconds > 0)
+                MaterialTheme.colorScheme.primary
+            else
+                MaterialTheme.colorScheme.onSurface,
         )
 
-        Box(modifier = Modifier.weight(1f)) {
-            when (val phase = state.phase) {
-                Phase.Working -> WorkingControls(
-                    restSeconds = current.effectiveRestSeconds,
-                    onMarkSetComplete = onMarkSetComplete,
-                    onFinish = onFinish,
-                )
-                is Phase.Resting -> RestingControls(
-                    phase = phase,
-                    onUpdateForm = onUpdateRestForm,
-                    onLogSet = onLogSet,
-                    onContinue = onContinueToNext,
-                )
-            }
+        Box(modifier = Modifier.weight(1f))
+        Button(
+            onClick = onContinue,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(if (phase.remainingSeconds > 0) "Skip rest" else "Start next exercise")
+        }
+        OutlinedButton(
+            onClick = onFinish,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Abandon workout")
         }
     }
 }

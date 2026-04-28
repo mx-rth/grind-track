@@ -31,4 +31,5 @@ data class RoutineExercise(
     val targetSets: Int,
     val targetReps: Int?,
     val restSecondsOverride: Int? = null,
+    val restBetweenExercisesOverride: Int? = null,
 )

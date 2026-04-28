@@ -32,6 +32,12 @@ sealed interface Phase {
         val repsDraft: String,
         val isLogged: Boolean = false,
     ) : Phase
+
+    data class RestingBeforeNextExercise(
+        val totalSeconds: Int,
+        val remainingSeconds: Int,
+        val nextExerciseName: String,
+    ) : Phase
 }
 
 sealed interface WorkoutUiState {
@@ -180,8 +186,15 @@ class WorkoutViewModel(
      */
     fun continueToNext() {
         val current = state.value as? WorkoutUiState.InSession ?: return
-        if (current.phase !is Phase.Resting) return
-        advanceFrom(current)
+        when (current.phase) {
+            is Phase.Resting -> advanceFrom(current)
+            is Phase.RestingBeforeNextExercise -> {
+                cancelTimerAndAlarm()
+                position.value = Position(current.currentExerciseIndex + 1, 1)
+                phase.value = Phase.Working
+            }
+            Phase.Working -> Unit
+        }
     }
 
     fun finishSession() {
@@ -196,15 +209,28 @@ class WorkoutViewModel(
 
     private fun advanceFrom(current: WorkoutUiState.InSession) {
         cancelTimerAndAlarm()
-        val totalSets = current.currentExercise?.routineExercise?.targetSets ?: return
+        val currentExercise = current.currentExercise ?: return
+        val totalSets = currentExercise.routineExercise.targetSets
         when {
             current.currentSetIndex < totalSets -> {
                 position.value = Position(current.currentExerciseIndex, current.currentSetIndex + 1)
                 phase.value = Phase.Working
             }
             current.currentExerciseIndex < current.exercises.lastIndex -> {
-                position.value = Position(current.currentExerciseIndex + 1, 1)
-                phase.value = Phase.Working
+                val nextExercise = current.exercises[current.currentExerciseIndex + 1]
+                val restSeconds = currentExercise.effectiveRestBetweenExercisesSeconds
+                if (restSeconds <= 0) {
+                    position.value = Position(current.currentExerciseIndex + 1, 1)
+                    phase.value = Phase.Working
+                } else {
+                    phase.value = Phase.RestingBeforeNextExercise(
+                        totalSeconds = restSeconds,
+                        remainingSeconds = restSeconds,
+                        nextExerciseName = nextExercise.exercise.name,
+                    )
+                    restTimerAlarm.schedule(restSeconds, exerciseName = nextExercise.exercise.name)
+                    startTimer(restSeconds)
+                }
             }
             else -> {
                 viewModelScope.launch {
@@ -223,8 +249,11 @@ class WorkoutViewModel(
             while (remaining > 0) {
                 delay(1.seconds)
                 remaining--
-                val resting = phase.value as? Phase.Resting ?: return@launch
-                phase.value = resting.copy(remainingSeconds = remaining)
+                phase.value = when (val current = phase.value) {
+                    is Phase.Resting -> current.copy(remainingSeconds = remaining)
+                    is Phase.RestingBeforeNextExercise -> current.copy(remainingSeconds = remaining)
+                    Phase.Working -> return@launch
+                }
             }
         }
     }
