@@ -70,8 +70,8 @@ fun WorkoutScreen(
                     state = current,
                     onMarkSetComplete = viewModel::markSetComplete,
                     onUpdateRestForm = viewModel::updateRestForm,
-                    onSubmitRest = viewModel::submitRest,
-                    onSkipRest = viewModel::skipRest,
+                    onLogSet = viewModel::logSet,
+                    onContinueToNext = viewModel::continueToNext,
                     onFinish = viewModel::finishSession,
                 )
             }
@@ -128,8 +128,8 @@ private fun InSessionContent(
     state: WorkoutUiState.InSession,
     onMarkSetComplete: () -> Unit,
     onUpdateRestForm: (weight: String, reps: String) -> Unit,
-    onSubmitRest: () -> Unit,
-    onSkipRest: () -> Unit,
+    onLogSet: () -> Unit,
+    onContinueToNext: () -> Unit,
     onFinish: () -> Unit,
 ) {
     val current = state.currentExercise
@@ -172,8 +172,8 @@ private fun InSessionContent(
                 is Phase.Resting -> RestingControls(
                     phase = phase,
                     onUpdateForm = onUpdateRestForm,
-                    onSubmit = onSubmitRest,
-                    onSkip = onSkipRest,
+                    onLogSet = onLogSet,
+                    onContinue = onContinueToNext,
                 )
             }
         }
@@ -216,13 +216,12 @@ private fun WorkingControls(
 private fun RestingControls(
     phase: Phase.Resting,
     onUpdateForm: (weight: String, reps: String) -> Unit,
-    onSubmit: () -> Unit,
-    onSkip: () -> Unit,
+    onLogSet: () -> Unit,
+    onContinue: () -> Unit,
 ) {
-    val timerLabel = if (phase.remainingSeconds > 0) {
-        "Rest: ${phase.remainingSeconds}s"
-    } else {
-        "Rest complete — log your set"
+    val timerLabel = when {
+        phase.remainingSeconds > 0 -> "Rest: ${phase.remainingSeconds}s"
+        else -> "Rest complete"
     }
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -243,6 +242,7 @@ private fun RestingControls(
                 value = phase.weightDraft,
                 onValueChange = { onUpdateForm(it, phase.repsDraft) },
                 label = { Text("Weight") },
+                enabled = !phase.isLogged,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                     keyboardType = KeyboardType.Decimal,
                 ),
@@ -253,6 +253,7 @@ private fun RestingControls(
                 value = phase.repsDraft,
                 onValueChange = { onUpdateForm(phase.weightDraft, it) },
                 label = { Text("Reps") },
+                enabled = !phase.isLogged,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                     keyboardType = KeyboardType.Number,
                 ),
@@ -262,17 +263,17 @@ private fun RestingControls(
         }
         Box(modifier = Modifier.weight(1f))
         Button(
-            onClick = onSubmit,
-            enabled = isSubmittable(phase),
+            onClick = onLogSet,
+            enabled = !phase.isLogged && isSubmittable(phase),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Log set & continue")
+            Text(if (phase.isLogged) "Logged ✓" else "Log set")
         }
         OutlinedButton(
-            onClick = onSkip,
+            onClick = onContinue,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Skip logging")
+            Text(if (phase.isLogged) "Continue to next set" else "Skip & continue")
         }
     }
 }

@@ -40,7 +40,7 @@ val appModule: Module = module {
 
     viewModel { RoutinesViewModel(get()) }
     viewModel { (routineId: Long) -> RoutineEditorViewModel(routineId, get(), get()) }
-    viewModel { WorkoutViewModel(get(), get()) }
+    viewModel { WorkoutViewModel(get(), get(), get()) }
     viewModel { ProgressViewModel(get()) }
 }
 
