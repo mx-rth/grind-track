@@ -39,7 +39,7 @@ val appModule: Module = module {
     single { RoutineRepository(get(), get(), get()) }
     single { ExerciseRepository(get()) }
     single { WorkoutRepository(get(), get()) }
-    single { ProgressRepository(get()) }
+    single { ProgressRepository(get(), get(), get()) }
     single { SeedDataManager(get(), get(), get(), get(), get()) }
 
     viewModel { RoutinesViewModel(get()) }

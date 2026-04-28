@@ -19,6 +19,7 @@ data class ProgressUiState(
     val exercises: List<Exercise> = emptyList(),
     val selectedExerciseId: Long? = null,
     val history: List<SetEntry> = emptyList(),
+    val streak: Int = 0,
     val isLoading: Boolean = true,
 )
 
@@ -31,19 +32,23 @@ class ProgressViewModel(
 
     val state: StateFlow<ProgressUiState> = combine(
         repository.observeExercisesWithActivity(),
+        repository.observeStreak(),
         explicitSelection,
-    ) { exercises, explicit ->
-        val effective = explicit ?: exercises.firstOrNull()?.id
-        effective to exercises
-    }.flatMapLatest { (effectiveId, exercises) ->
+    ) { exercises, streak, explicit ->
+        Triple(explicit ?: exercises.firstOrNull()?.id, exercises, streak)
+    }.flatMapLatest { triple ->
+        val effectiveId = triple.first
+        val exercises = triple.second
+        val streak = triple.third
         if (effectiveId == null) {
-            flowOf(ProgressUiState(exercises = exercises, isLoading = false))
+            flowOf(ProgressUiState(exercises = exercises, streak = streak, isLoading = false))
         } else {
             repository.observeHistoryForExercise(effectiveId).map { history ->
                 ProgressUiState(
                     exercises = exercises,
                     selectedExerciseId = effectiveId,
                     history = history,
+                    streak = streak,
                     isLoading = false,
                 )
             }

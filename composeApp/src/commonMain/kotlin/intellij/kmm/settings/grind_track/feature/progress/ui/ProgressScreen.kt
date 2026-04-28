@@ -61,7 +61,26 @@ fun ProgressScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Progress") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Progress") },
+                actions = {
+                    if (!state.isLoading && state.streak > 0) {
+                        Row(
+                            modifier = Modifier.padding(end = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text("🔥", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                text = state.streak.toString(),
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                        }
+                    }
+                },
+            )
+        },
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when {
