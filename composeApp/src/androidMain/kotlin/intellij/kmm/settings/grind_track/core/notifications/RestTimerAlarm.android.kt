@@ -10,15 +10,20 @@ import androidx.core.content.getSystemService
 private const val REQUEST_CODE = 0x6711
 internal const val ACTION_REST_DONE = "intellij.kmm.settings.grind_track.action.REST_DONE"
 internal const val EXTRA_EXERCISE_NAME = "exerciseName"
+internal const val EXTRA_CHANNEL_ID = "channelId"
 
-actual class RestTimerAlarm(private val context: Context) {
+actual class RestTimerAlarm(
+    private val context: Context,
+    private val customSoundManager: CustomSoundManager,
+) {
     private val alarmManager: AlarmManager? = context.getSystemService<AlarmManager>()
 
     actual fun schedule(seconds: Int, exerciseName: String) {
         val manager = alarmManager ?: return
         ensureRestTimerChannel(context)
+        val channelId = customSoundManager.currentChannelId()
         val triggerAt = System.currentTimeMillis() + seconds * 1000L
-        val pi = createPendingIntent(exerciseName)
+        val pi = createPendingIntent(exerciseName, channelId)
         val canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()
         if (canExact) {
             manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
@@ -34,10 +39,11 @@ actual class RestTimerAlarm(private val context: Context) {
         pi.cancel()
     }
 
-    private fun createPendingIntent(exerciseName: String): PendingIntent {
+    private fun createPendingIntent(exerciseName: String, channelId: String): PendingIntent {
         val intent = Intent(context, RestTimerReceiver::class.java).apply {
             action = ACTION_REST_DONE
             putExtra(EXTRA_EXERCISE_NAME, exerciseName)
+            putExtra(EXTRA_CHANNEL_ID, channelId)
         }
         return PendingIntent.getBroadcast(
             context,

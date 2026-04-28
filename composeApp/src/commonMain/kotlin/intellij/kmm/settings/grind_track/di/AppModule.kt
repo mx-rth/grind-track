@@ -11,6 +11,7 @@ import intellij.kmm.settings.grind_track.core.database.GymTrackDatabase
 import intellij.kmm.settings.grind_track.feature.progress.ui.ProgressViewModel
 import intellij.kmm.settings.grind_track.feature.routines.ui.RoutineEditorViewModel
 import intellij.kmm.settings.grind_track.feature.routines.ui.RoutinesViewModel
+import intellij.kmm.settings.grind_track.feature.settings.ui.SettingsViewModel
 import intellij.kmm.settings.grind_track.feature.workout.ui.WorkoutViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +47,7 @@ val appModule: Module = module {
     viewModel { (routineId: Long) -> RoutineEditorViewModel(routineId, get(), get()) }
     viewModel { WorkoutViewModel(get(), get(), get()) }
     viewModel { ProgressViewModel(get()) }
+    viewModel { SettingsViewModel(get()) }
 }
 
 expect fun platformModule(): Module

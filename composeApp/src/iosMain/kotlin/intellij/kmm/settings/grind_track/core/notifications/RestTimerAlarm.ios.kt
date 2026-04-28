@@ -19,7 +19,9 @@ import platform.darwin.NSObject
 
 private const val IDENTIFIER = "rest_timer_alarm"
 
-actual class RestTimerAlarm {
+actual class RestTimerAlarm(
+    private val customSoundManager: CustomSoundManager,
+) {
 
     private val center: UNUserNotificationCenter = UNUserNotificationCenter.currentNotificationCenter()
     private val foregroundDelegate = ForegroundDelegate()
@@ -34,10 +36,16 @@ actual class RestTimerAlarm {
     @OptIn(ExperimentalForeignApi::class)
     actual fun schedule(seconds: Int, exerciseName: String) {
         cancel()
+        val customFilename = customSoundManager.current()?.internalFilename
+        val sound = if (customFilename != null) {
+            UNNotificationSound.soundNamed(customFilename)
+        } else {
+            UNNotificationSound.defaultSound
+        }
         val content = UNMutableNotificationContent().apply {
             setTitle("Rest complete")
             setBody(if (exerciseName.isNotBlank()) "Time for $exerciseName" else "Time for the next set")
-            setSound(UNNotificationSound.defaultSound)
+            setSound(sound)
         }
         val trigger = UNTimeIntervalNotificationTrigger.triggerWithTimeInterval(
             timeInterval = seconds.toDouble().coerceAtLeast(1.0),
