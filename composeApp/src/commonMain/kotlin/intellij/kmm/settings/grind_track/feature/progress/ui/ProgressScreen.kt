@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -20,9 +22,13 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -133,8 +139,8 @@ private fun HistoryList(history: List<SetEntry>) {
         dateOccurrences[date] = count
         if (count == 1) shortDate(date) else "${shortDate(date)} ($count)"
     }
-    val weightBySession: List<Pair<String, Double>> = sessionGroups.mapIndexed { i, (_, entries) ->
-        sessionLabels[i] to entries.maxOf { it.weight }
+    val weightBySession: List<Pair<String, List<Double>>> = sessionGroups.mapIndexed { i, (_, entries) ->
+        sessionLabels[i] to entries.map { it.weight }
     }
     val repsBySession: List<Pair<String, Int>> = sessionGroups.mapIndexed { i, (_, entries) ->
         sessionLabels[i] to entries.sumOf { it.reps }
@@ -169,16 +175,33 @@ private fun HistoryList(history: List<SetEntry>) {
     }
 }
 
+private enum class WeightMode(val label: String) {
+    Max("Max"),
+    Average("Average"),
+    FirstSet("First Set"),
+}
+
 @Composable
-private fun WeightProgressionChart(dataPoints: List<Pair<String, Double>>) {
+private fun WeightProgressionChart(dataPoints: List<Pair<String, List<Double>>>) {
     val textMeasurer = rememberTextMeasurer()
     val primaryColor = MaterialTheme.colorScheme.primary
     val onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant
     val outlineVariantColor = MaterialTheme.colorScheme.outlineVariant
 
-    val n = dataPoints.size
-    val maxW = if (n > 0) dataPoints.maxOf { it.second } else 0.0
-    val minW = if (n > 0) dataPoints.minOf { it.second } else 0.0
+    var mode by remember { mutableStateOf(WeightMode.Max) }
+    var dropdownExpanded by remember { mutableStateOf(false) }
+
+    val resolvedData: List<Pair<String, Double>> = dataPoints.map { (label, weights) ->
+        label to when (mode) {
+            WeightMode.Max -> weights.maxOrNull() ?: 0.0
+            WeightMode.Average -> if (weights.isEmpty()) 0.0 else weights.average()
+            WeightMode.FirstSet -> weights.firstOrNull() ?: 0.0
+        }
+    }
+
+    val n = resolvedData.size
+    val maxW = if (n > 0) resolvedData.maxOf { it.second } else 0.0
+    val minW = if (n > 0) resolvedData.minOf { it.second } else 0.0
     val rangePad = if (maxW == minW) 10.0 else (maxW - minW) * 0.15
     val displayMin = (minW - rangePad).coerceAtLeast(0.0)
     val displayMax = maxW + rangePad
@@ -186,7 +209,32 @@ private fun WeightProgressionChart(dataPoints: List<Pair<String, Double>>) {
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Weight Progression", style = MaterialTheme.typography.titleSmall)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Weight Progression", style = MaterialTheme.typography.titleSmall)
+                Box {
+                    TextButton(
+                        onClick = { dropdownExpanded = true },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    ) {
+                        Text(mode.label, style = MaterialTheme.typography.labelMedium)
+                    }
+                    DropdownMenu(
+                        expanded = dropdownExpanded,
+                        onDismissRequest = { dropdownExpanded = false },
+                    ) {
+                        WeightMode.entries.forEach { m ->
+                            DropdownMenuItem(
+                                text = { Text(m.label) },
+                                onClick = { mode = m; dropdownExpanded = false },
+                            )
+                        }
+                    }
+                }
+            }
             Canvas(modifier = Modifier.fillMaxWidth().height(150.dp)) {
                 val leftPad = 52.dp.toPx()
                 val rightPad = 12.dp.toPx()
@@ -214,17 +262,18 @@ private fun WeightProgressionChart(dataPoints: List<Pair<String, Double>>) {
                     )
                 }
 
-                // X positions
+                // X positions — inset by hPad so the first/last point don't sit on the axis edge
+                val hPad = 16.dp.toPx()
                 val xs = if (n <= 1) {
                     FloatArray(n) { leftPad + cw / 2f }
                 } else {
-                    FloatArray(n) { i -> leftPad + i.toFloat() / (n - 1).toFloat() * cw }
+                    FloatArray(n) { i -> leftPad + hPad + i.toFloat() / (n - 1).toFloat() * (cw - 2 * hPad) }
                 }
 
                 // X-axis labels (up to 5)
                 val labelStep = ((n.toFloat() / 5f).coerceAtLeast(1f)).toInt()
                 for (i in 0 until n step labelStep) {
-                    val measured = textMeasurer.measure(dataPoints[i].first, TextStyle(fontSize = 9.sp))
+                    val measured = textMeasurer.measure(resolvedData[i].first, TextStyle(fontSize = 9.sp))
                     drawText(
                         measured,
                         color = onSurfaceVariantColor,
@@ -236,7 +285,7 @@ private fun WeightProgressionChart(dataPoints: List<Pair<String, Double>>) {
                 if (n > 1) {
                     val path = Path()
                     for (i in 0 until n) {
-                        val frac = ((dataPoints[i].second - displayMin) / range).toFloat().coerceIn(0f, 1f)
+                        val frac = ((resolvedData[i].second - displayMin) / range).toFloat().coerceIn(0f, 1f)
                         val y = topPad + ch * (1f - frac)
                         if (i == 0) path.moveTo(xs[i], y) else path.lineTo(xs[i], y)
                     }
@@ -245,7 +294,7 @@ private fun WeightProgressionChart(dataPoints: List<Pair<String, Double>>) {
 
                 // Dots
                 for (i in 0 until n) {
-                    val frac = ((dataPoints[i].second - displayMin) / range).toFloat().coerceIn(0f, 1f)
+                    val frac = ((resolvedData[i].second - displayMin) / range).toFloat().coerceIn(0f, 1f)
                     val y = topPad + ch * (1f - frac)
                     drawCircle(primaryColor, radius = 4.dp.toPx(), center = Offset(xs[i], y))
                     drawCircle(Color.White, radius = 2.dp.toPx(), center = Offset(xs[i], y))
@@ -263,8 +312,12 @@ private fun RepsBarChart(dataPoints: List<Pair<String, Int>>) {
     val outlineVariantColor = MaterialTheme.colorScheme.outlineVariant
 
     val n = dataPoints.size
+    val minReps = if (n > 0) dataPoints.minOf { it.second } else 0
     val maxReps = if (n > 0) dataPoints.maxOf { it.second } else 0
-    val displayMax = (maxReps * 1.15f).coerceAtLeast(1f)
+    val rangePad = if (maxReps == minReps) maxReps * 0.15f else (maxReps - minReps) * 0.15f
+    val displayMin = (minReps - rangePad).coerceAtLeast(0f)
+    val displayMax = (maxReps + rangePad).coerceAtLeast(1f)
+    val range = (displayMax - displayMin).coerceAtLeast(0.001f)
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -287,7 +340,7 @@ private fun RepsBarChart(dataPoints: List<Pair<String, Int>>) {
                         end = Offset(leftPad + cw, y),
                         strokeWidth = 1f,
                     )
-                    val labelText = "${(displayMax * frac).toInt()}"
+                    val labelText = "${(displayMin + range * frac).toInt()}"
                     val measured = textMeasurer.measure(labelText, TextStyle(fontSize = 9.sp))
                     drawText(
                         measured,
@@ -303,7 +356,7 @@ private fun RepsBarChart(dataPoints: List<Pair<String, Int>>) {
 
                 for (i in 0 until n) {
                     val cx = leftPad + i * slotWidth + slotWidth / 2f
-                    val frac = (dataPoints[i].second.toFloat() / displayMax).coerceIn(0f, 1f)
+                    val frac = ((dataPoints[i].second - displayMin) / range).coerceIn(0f, 1f)
                     val barHeight = (ch * frac).coerceAtLeast(2.dp.toPx())
                     drawRoundRect(
                         color = secondaryColor,
