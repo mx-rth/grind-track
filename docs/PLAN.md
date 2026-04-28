@@ -2,97 +2,56 @@
 
 ## Product description
 
-grind-track is a Kotlin Multiplatform (Android + iOS) gym workout tracker. The app supports three core flows:
+grind-track is a Kotlin Multiplatform (Android + iOS) gym workout tracker. The app supports four core flows:
 
-1. **Build a routine.** The user creates a workout routine consisting of a sequence of exercises. Each entry in the routine specifies a target number of sets and reps and the rest interval to use after completing a set of that exercise.
-2. **Run a workout.** The user picks a routine and the app replays it set by set. When the user marks a set complete, a rest timer starts automatically using the rest interval configured for that exercise. While the timer runs, the user enters the actual data they performed for that set (weight lifted, reps achieved). The data is persisted immediately.
-3. **Track progress.** A dedicated screen reads the persisted set history and visualises progress — initially as a per-exercise list/chart of weight × reps over time.
+1. **Build a routine.** Create a workout routine as an ordered sequence of exercises. Each entry specifies a target number of sets, target reps (or "to failure"), and an optional per-exercise rest override.
+2. **Replay it.** Pick a routine and step through it set by set during a workout session.
+3. **Log sets.** When a set is marked complete, a per-exercise rest timer counts down; during the rest the user enters the actual weight and reps performed, persisted as a `SetEntry`.
+4. **Track progress.** A progress screen reads the persisted history and visualises per-exercise improvement over time.
 
-The UI is organised as a three-tab bottom-navigation app: **Routines**, **Workout**, **Progress**.
+The UI is a three-tab bottom-navigation app: **Routines**, **Workout**, **Progress**.
 
-## What is already implemented
+## Current implementation (2026-04-28)
 
-This is the wizard-scaffolded baseline. None of the user-visible features are wired up yet, but the foundation is in place.
+All four milestones of the original plan are implemented; `./gradlew :composeApp:check` is green for Android (debug + release) and `iosSimulatorArm64`. What ships today:
 
-### Build & dependency setup
-- Kotlin Multiplatform module `composeApp` targeting `androidTarget`, `iosArm64`, `iosSimulatorArm64`.
-- Compose Multiplatform UI, Material3, lifecycle-viewmodel/runtime-compose, navigation-compose multiplatform.
-- Room KMP with KSP wired for all three targets, schemas exported to `composeApp/schemas`.
-- Koin DI (`koin-core`, `koin-compose`, `koin-compose-viewmodel`, `koin-android`).
-- kotlinx-datetime + kotlinx-coroutines.
-- Test deps in `commonTest`: kotlin-test, kotlinx-coroutines-test, turbine, koin-test.
+### Routines
+- List of routines with a "+" FAB. Tapping the FAB inserts a "New routine" row and navigates to its editor; per-row delete in place.
+- Editor: editable name, ordered list of routine-exercises, each with inline `Sets` / `Reps` / `Rest` fields and up/down/remove controls. A "To failure (max reps)" checkbox swaps the reps field for a `null` target — the actual reps performed are captured at workout time.
+- Add-exercise dialog: pick from the catalogue or create a new exercise inline. The create flow uses a single combined "Create & add" form so rest seconds are entered exactly once.
 
-### Persistence layer (Room)
-All entities live in `core/database/entity/`:
+### Workout session
+- The active session is observed from the DB so the screen flips automatically between picker and in-session as sessions start/finish.
+- Picker: list of routines as cards. Tap to start. Empty-state copy when no routines exist.
+- In-session: routine name in the top bar, current exercise headline, `Set X of Y`, the target reps (`Target: 8 reps` or `Reps: to failure`), and the upcoming rest interval.
+- "Mark set complete" enters the rest phase: a coroutine-driven 1 Hz countdown plus a `Weight` + `Reps` form prefilled from the last logged set of that exercise (within the session). "Log set & continue" persists a `SetEntry` and advances the state machine; "Skip logging" advances without writing. Timer is cancelled on every advance, on Finish, and in `onCleared`.
+- Routine deletion mid-session (FK `SET_NULL` on `routineId`) auto-finishes the session.
 
-| Entity | Fields | Notes |
-|---|---|---|
-| `Exercise` | `id`, `name`, `notes`, `defaultRestSeconds` | Catalogue of reusable exercises |
-| `Routine` | `id`, `name`, `createdAt: Instant` | Workout template |
-| `RoutineExercise` | `id`, `routineId`, `exerciseId`, `position`, `targetSets`, `restSecondsOverride?` | Join table; cascades on routine delete, restricts on exercise delete |
-| `WorkoutSession` | `id`, `routineId?`, `startedAt`, `finishedAt?` | One run of a routine; `routineId` set NULL on routine delete |
-| `SetEntry` | `id`, `sessionId`, `routineExerciseId`, `setIndex`, `weight: Double`, `reps: Int`, `completedAt` | Actual performed set; cascades on session/routineExercise delete |
+### Progress
+- A `LazyRow` of `FilterChip`s lists every exercise that has at least one logged set, ordered most-recent first; the most-recent exercise is selected by default and the user can switch.
+- Per-day grouped history list. Each day is an `ElevatedCard` with a `Month D, YYYY` heading, then rows like `Set N    W × R`.
 
-`InstantTypeConverter` bridges `kotlinx.datetime.Instant` ↔ epoch millis. The database is `GymTrackDatabase` (version 1, `gymtrack.db`); construction goes through an `expect` `DatabaseFactory` with platform actuals in `androidMain`/`iosMain`. Driver is `BundledSQLiteDriver`.
+### Persistence
+- Room v3, `BundledSQLiteDriver`, schemas exported to `composeApp/schemas`. Five entities: `Exercise`, `Routine`, `RoutineExercise` (with `targetReps: Int?` — null means "to failure"), `WorkoutSession`, `SetEntry`.
+- Alpha-stage destructive migration via `fallbackToDestructiveMigration(dropAllTables = true)` in the DI builder. There is no real migration code; bumping `version` wipes data.
+- Repositories in `core/data/`: `RoutineRepository`, `ExerciseRepository`, `WorkoutRepository`, `ProgressRepository`. All Koin singletons.
 
-DAOs implemented so far are intentionally minimal — `observeAll`/`observeForX` (`Flow`-returning) and `insert` only. No `update`, `delete`, or aggregate queries yet.
+### UI architecture
+- One ViewModel per feature screen via `koin-compose-viewmodel`: `RoutinesViewModel`, `RoutineEditorViewModel(routineId)` (parameterised), `WorkoutViewModel`, `ProgressViewModel`.
+- Each ViewModel exposes a `StateFlow<UiState>`. Screens are stateless except for transient form drafts hoisted close to the inputs.
+- Navigation: top-level destinations are tabs; the only deep route is `routine/{routineId}` for the editor (`NavType.LongType`, args read via `androidx.savedstate.read { getLong(...) }`).
 
-### DI
-`AppModule.kt` (commonMain) exposes the database and all five DAOs as Koin singletons. `expect fun platformModule(): Module` is implemented per platform (Android wires `DatabaseFactory` with `androidContext`; iOS uses an NSFileManager-backed factory). `initKoin` is invoked from `GymTrackApplication.onCreate` on Android.
+## Outstanding items / known gaps
 
-### UI shell
-- `App()` (commonMain) → `GymTrackTheme` → `MainScreen()`.
-- `MainScreen` hosts a Material3 `Scaffold` with a bottom `NavigationBar` and a `NavHost`.
-- Three top-level destinations: `Routines`, `Workout`, `Progress` (`TopLevelDestination` sealed class).
-- All three feature screens currently render only an `EmptyState` placeholder. No ViewModels exist yet.
+- **Position persistence on cold start.** Mid-session app kill currently restarts at exercise 1 / set 1 even though logged `SetEntry` rows persist. A small follow-up: derive the next position from per-`routine_exercise` `SetEntry` counts when the active session is observed.
+- **Chart on the progress screen.** The original plan called for a Compose canvas line chart of top-set weight / e1RM. Only the tabular history is built; the chart is unbuilt.
+- **Tests.** No ViewModel or DAO tests yet. The convention ("one happy-path + one error-path per ViewModel") would naturally use turbine + koin-test fakes for ViewModels and Room's in-memory builder + `BundledSQLiteDriver` for DAOs.
+- **Deprecation cleanup.** A handful of pre-existing warnings: `Icons.Filled.{ArrowBack, List}` are deprecated in favour of `Icons.AutoMirrored.Filled.*`; entities and `InstantTypeConverter` still reference the deprecated `kotlinx.datetime.Instant` typealias instead of `kotlin.time.Instant`.
+- **Material icons set.** The project pulls `material-icons-core` only. Adding a feature that needs an icon outside the core set (`Delete`, `Save`, …) means either adding `material-icons-extended` as a dependency or substituting from core (`Close`, `Check`) like the current code does.
+- **No real Room migrations.** Acceptable while the app is alpha and there's no production data; before any external release this will need actual `Migration` objects.
 
-### Identified schema gaps (will need migration before milestone 1 ships)
-- `RoutineExercise` has `targetSets` but **no `targetReps`** (and no target weight). The product spec says routines define target reps, so we need to add at least `targetReps: Int` (and optionally `targetWeight: Double?`) and bump the database version with a migration.
-- DAOs lack the mutation/aggregation queries the features will need (`update`, `delete`, latest-set-for-exercise, history-by-exercise, etc.).
+## Convention reminders for future work
 
----
-
-## Implementation roadmap
-
-The plan is organised into four milestones that each end in a usable slice of the product. Cross-cutting concerns (architecture conventions, testing) are listed once at the end.
-
-### Milestone 1 — Routine management
-**Outcome:** the user can create, edit, reorder, and delete routines and their exercises.
-
-1. Schema update: add `targetReps: Int` (and `targetWeight: Double?` if desired) to `RoutineExercise`; bump `GymTrackDatabase` to version 2 and write a Room migration (or destructive migration during alpha).
-2. Extend DAOs with `update`, `delete`, and ordered observation queries needed by the UI.
-3. Add a `RoutineRepository` and `ExerciseRepository` in commonMain wrapping the DAOs (returning `Flow` for observation, `suspend` for mutations).
-4. `RoutinesScreen` — list routines with a "+" FAB; tapping a routine opens a detail/edit screen where exercises can be added (chosen from `Exercise` catalogue or created inline), reordered, and have target sets/reps/rest set. Build the `RoutinesViewModel` and `RoutineEditorViewModel` using `koin-compose-viewmodel`.
-5. Surface exercise CRUD either inline in routine editor or behind a small "Exercise library" screen.
-
-### Milestone 2 — Replayable workout session
-**Outcome:** the user can pick a routine, step through it set by set, and complete the workout.
-
-1. `WorkoutRepository` to start/finish `WorkoutSession`s.
-2. `WorkoutScreen` becomes a routine picker when no session is active. On start, transition to an in-session screen that displays the current exercise, current set index, and the target reps × sets.
-3. `WorkoutViewModel` holds the session state machine: current exercise, current set, remaining sets, advance logic. The session state survives configuration changes (ViewModel) and process death (resume from DB by latest unfinished `WorkoutSession`).
-4. "Mark set complete" advances the state machine and triggers the rest timer (built in milestone 3 — for now just no-op or a stub).
-
-### Milestone 3 — Set logging + rest timer
-**Outcome:** during a workout, finishing a set starts the per-exercise rest timer and prompts the user to log weight/reps; the entry is persisted as a `SetEntry`.
-
-1. Rest timer: a small commonMain coroutine-based countdown driven by `restSecondsOverride ?: defaultRestSeconds`. UI shows remaining seconds; sound/haptic on completion can come later.
-2. While the timer runs, the in-session screen reveals an inline form for weight + reps (defaulting to the previous set's values, or to last-known values for that exercise).
-3. On submit (or on timer completion), insert a `SetEntry` via `SetEntryDao.insert`, advance the state machine, and reset the timer for the next set.
-4. Edge cases: skipping a set, ending the session early (sets `finishedAt`), aborting without logging.
-
-### Milestone 4 — Progress screen
-**Outcome:** per-exercise progress over time is visible.
-
-1. Add aggregation queries: latest `SetEntry` per exercise, history of `(weight, reps, completedAt)` for a given `exerciseId`, best (top set / e1RM) per session.
-2. `ProgressViewModel` exposes a list of exercises (sorted by recent activity) and, on selection, the time series for that exercise.
-3. `ProgressScreen` — an exercise picker plus a chart (initially a simple Compose canvas line chart of estimated 1RM or top-set weight; can be swapped for a charting lib later) and a tabular history.
-
-### Cross-cutting
-
-- **Architecture convention.** First feature (Milestone 1) sets the precedent: `feature/<name>/{data,domain,ui}` with ViewModels via `koin-compose-viewmodel`, repositories injected via Koin, screens stateless wherever possible (state hoisted to the ViewModel).
-- **Testing.**
-  - DAOs: use Room's in-memory builder + `BundledSQLiteDriver` in androidUnitTest / iosTest.
-  - ViewModels: turbine on the exposed `StateFlow`; koin-test to provide fake repositories.
-  - Aim for one test per ViewModel happy path and the most important error path before declaring a milestone done.
-- **Verification.** Each milestone must keep `./gradlew :composeApp:check --no-daemon` green and a clean Android `assembleDebug` build.
+- New features go in `feature/<name>/{ui[, data, domain]}`. ViewModels via `koin-compose-viewmodel`, repositories via Koin singletons.
+- Verify with `./gradlew :composeApp:check --no-daemon` (preapproved in `.claude/settings.local.json`). The JBR 21 `JAVA_HOME` workaround is in the same allowlist if Gradle ever fails on JDK version.
+- Reach for `kotlin.time.Clock` / `kotlin.time.Instant` in new code rather than the deprecated `kotlinx.datetime` aliases.
