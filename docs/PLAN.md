@@ -33,6 +33,14 @@ All four milestones of the original plan are implemented; `./gradlew :composeApp
 - A `LazyRow` of `FilterChip`s lists every exercise that has at least one logged set, ordered most-recent first; the most-recent exercise is selected by default and the user can switch.
 - Per-day grouped history list. Each day is an `ElevatedCard` with a `Month D, YYYY` heading, then rows like `Set N    W × R`.
 
+### Settings (custom notification sound)
+- Reachable via a gear `IconButton` in the Routines tab top bar (no new bottom-nav tab). Single screen with a "Notification sound" section: shows the current sound (filename or "Default alarm tone"), a "Pick a .wav file" button, and a "Reset to default" button.
+- File picker: `@Composable expect fun rememberSoundFilePicker` — Android uses `rememberLauncherForActivityResult(OpenDocument())` filtered to `audio/wav`; iOS uses `LocalUIViewController` to present `UIDocumentPickerViewController` with `UTType.wav`.
+- Selected files are copied into app-private storage: Android writes to `<filesDir>/sounds/custom_sound_v$gen.wav` exposed via a `FileProvider` (authority `intellij.kmm.settings.grind_track.fileprovider`); iOS writes to `<App_Home>/Library/Sounds/custom_sound_v$gen.wav` so `UNNotificationSound.soundNamed(...)` resolves it. The version-suffix avoids both Android channel-id reuse (sounds are immutable post-creation) and iOS notification-sound caching.
+- Android channel strategy: keep the default `rest_timer_alarm` channel for the default tone; on each new pick create `rest_timer_alarm_custom_$gen` with `USAGE_ALARM` audio attributes and the FileProvider URI, deleting the previous custom channel. `RestTimerAlarm.schedule` looks up the active channel id from `CustomSoundManager` and forwards it to `RestTimerReceiver` as an Intent extra. iOS reads the current `internalFilename` and applies `UNNotificationSound.soundNamed(...)` per-schedule.
+- Persistence: `expect class SettingsStore` over `SharedPreferences` (Android) / `NSUserDefaults` (iOS). Three keys: `custom_sound_display_name`, `custom_sound_filename`, `custom_sound_generation`. No new dependencies.
+- Format restriction: `.wav` only. iOS hard-caps notification sounds at 30 seconds; longer files silently fall back to the default tone — surfaced as static helper text in the Settings screen.
+
 ### Persistence
 - Room v4, `BundledSQLiteDriver`, schemas exported to `composeApp/schemas`. Five entities: `Exercise`, `Routine`, `RoutineExercise` (with `targetReps: Int?` — null means "to failure"), `WorkoutSession`, `SetEntry`.
 - Alpha-stage destructive migration via `fallbackToDestructiveMigration(dropAllTables = true)` in the DI builder. There is no real migration code; bumping `version` wipes data.

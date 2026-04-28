@@ -11,10 +11,12 @@ import androidx.savedstate.read
 import intellij.kmm.settings.grind_track.feature.progress.ui.ProgressScreen
 import intellij.kmm.settings.grind_track.feature.routines.ui.RoutineEditorScreen
 import intellij.kmm.settings.grind_track.feature.routines.ui.RoutinesScreen
+import intellij.kmm.settings.grind_track.feature.settings.ui.SettingsScreen
 import intellij.kmm.settings.grind_track.feature.workout.ui.WorkoutScreen
 
 private const val ROUTINE_EDITOR_ROUTE = "routine"
 private const val ROUTINE_ID_ARG = "routineId"
+private const val SETTINGS_ROUTE = "settings"
 
 internal fun routineEditorRoute(routineId: Long): String = "$ROUTINE_EDITOR_ROUTE/$routineId"
 
@@ -33,6 +35,7 @@ fun GymTrackNavHost(
                 onOpenRoutine = { routineId ->
                     navController.navigate(routineEditorRoute(routineId))
                 },
+                onOpenSettings = { navController.navigate(SETTINGS_ROUTE) },
             )
         }
         composable(TopLevelDestination.Workout.route) { WorkoutScreen() }
@@ -47,6 +50,9 @@ fun GymTrackNavHost(
                 routineId = routineId,
                 onBack = { navController.popBackStack() },
             )
+        }
+        composable(SETTINGS_ROUTE) {
+            SettingsScreen(onBack = { navController.popBackStack() })
         }
     }
 }

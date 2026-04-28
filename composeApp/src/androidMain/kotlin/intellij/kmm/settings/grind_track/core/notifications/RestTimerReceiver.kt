@@ -21,6 +21,7 @@ class RestTimerReceiver : BroadcastReceiver() {
         ensureRestTimerChannel(context)
 
         val exerciseName = intent.getStringExtra(EXTRA_EXERCISE_NAME).orEmpty()
+        val channelId = intent.getStringExtra(EXTRA_CHANNEL_ID) ?: REST_TIMER_CHANNEL_ID
         val title = "Rest complete"
         val body = if (exerciseName.isNotBlank()) "Time for $exerciseName" else "Time for the next set"
 
@@ -32,7 +33,7 @@ class RestTimerReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        val notification = NotificationCompat.Builder(context, REST_TIMER_CHANNEL_ID)
+        val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_notification_alarm)
             .setContentTitle(title)
             .setContentText(body)
