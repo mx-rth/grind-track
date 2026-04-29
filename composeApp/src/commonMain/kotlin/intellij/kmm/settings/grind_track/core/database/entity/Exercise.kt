@@ -10,4 +10,7 @@ data class Exercise(
     val notes: String = "",
     val defaultRestSeconds: Int = 90,
     val defaultRestBetweenExercisesSeconds: Int = 180,
+    val unilateral: Boolean = false,
+    val defaultRestAfterFirstSideSeconds: Int = 60,
+    val bodyWeight: Boolean = false,
 )

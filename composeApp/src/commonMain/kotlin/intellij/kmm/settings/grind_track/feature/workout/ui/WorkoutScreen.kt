@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import intellij.kmm.settings.grind_track.core.data.RoutineExerciseWithExercise
 import intellij.kmm.settings.grind_track.core.database.entity.Routine
+import intellij.kmm.settings.grind_track.core.database.entity.Side
 import intellij.kmm.settings.grind_track.core.designsystem.EmptyState
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -163,6 +164,14 @@ private fun InSessionContent(
                 text = "Set ${state.currentSetIndex} of ${current.routineExercise.targetSets}",
                 style = MaterialTheme.typography.titleLarge,
             )
+            val side = state.currentSide
+            if (side != null) {
+                Text(
+                    text = "${sideLabelText(side)} side",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.tertiary,
+                )
+            }
             Text(
                 text = repsLabel(current),
                 style = MaterialTheme.typography.titleMedium,
@@ -171,13 +180,27 @@ private fun InSessionContent(
 
             Box(modifier = Modifier.weight(1f)) {
                 when (phase) {
-                    Phase.Working -> WorkingControls(
-                        restSeconds = current.effectiveRestSeconds,
-                        onMarkSetComplete = onMarkSetComplete,
-                        onFinish = onFinish,
-                    )
+                    Phase.Working -> {
+                        val isUnilateralFirstSide = current.exercise.unilateral && state.currentSideIndex == 0
+                        val restSeconds = if (isUnilateralFirstSide) {
+                            current.effectiveRestAfterFirstSideSeconds
+                        } else {
+                            current.effectiveRestSeconds
+                        }
+                        val restLabel = if (isUnilateralFirstSide) {
+                            "Rest between sides will be ${restSeconds}s"
+                        } else {
+                            "Rest will be ${restSeconds}s"
+                        }
+                        WorkingControls(
+                            restLabel = restLabel,
+                            onMarkSetComplete = onMarkSetComplete,
+                            onFinish = onFinish,
+                        )
+                    }
                     is Phase.Resting -> RestingControls(
                         phase = phase,
+                        weightLabel = if (current.exercise.bodyWeight) "Added weight" else "Weight",
                         onUpdateForm = onUpdateRestForm,
                         onLogSet = onLogSet,
                         onContinue = onContinueToNext,
@@ -187,6 +210,11 @@ private fun InSessionContent(
             }
         }
     }
+}
+
+private fun sideLabelText(side: Side): String = when (side) {
+    Side.LEFT -> "Left"
+    Side.RIGHT -> "Right"
 }
 
 @Composable
@@ -242,7 +270,7 @@ private fun RestingBeforeNextExerciseContent(
 
 @Composable
 private fun WorkingControls(
-    restSeconds: Int,
+    restLabel: String,
     onMarkSetComplete: () -> Unit,
     onFinish: () -> Unit,
 ) {
@@ -251,7 +279,7 @@ private fun WorkingControls(
         verticalArrangement = Arrangement.Bottom,
     ) {
         Text(
-            text = "Rest will be ${restSeconds}s",
+            text = restLabel,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth(),
@@ -275,18 +303,35 @@ private fun WorkingControls(
 @Composable
 private fun RestingControls(
     phase: Phase.Resting,
+    weightLabel: String,
     onUpdateForm: (weight: String, reps: String) -> Unit,
     onLogSet: () -> Unit,
     onContinue: () -> Unit,
 ) {
+    val restLabelPrefix = if (phase.isInterSideRest) "Rest before next side" else "Rest"
     val timerLabel = when {
-        phase.remainingSeconds > 0 -> "Rest: ${phase.remainingSeconds}s"
-        else -> "Rest complete"
+        phase.remainingSeconds > 0 -> "$restLabelPrefix: ${phase.remainingSeconds}s"
+        else -> "$restLabelPrefix complete"
+    }
+    val continueLabel = when {
+        phase.isInterSideRest && phase.isLogged -> "Continue to next side"
+        phase.isInterSideRest -> "Skip & continue to next side"
+        phase.isLogged -> "Continue to next set"
+        else -> "Skip & continue"
     }
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        if (phase.side != null) {
+            Text(
+                text = "Logging: ${sideLabelText(phase.side)} side",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+            )
+        }
         Text(
             text = timerLabel,
             style = MaterialTheme.typography.titleLarge,
@@ -301,7 +346,7 @@ private fun RestingControls(
             OutlinedTextField(
                 value = phase.weightDraft,
                 onValueChange = { onUpdateForm(it, phase.repsDraft) },
-                label = { Text("Weight") },
+                label = { Text(weightLabel) },
                 enabled = !phase.isLogged,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                     keyboardType = KeyboardType.Decimal,
@@ -333,7 +378,7 @@ private fun RestingControls(
             onClick = onContinue,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(if (phase.isLogged) "Continue to next set" else "Skip & continue")
+            Text(continueLabel)
         }
     }
 }

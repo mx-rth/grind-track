@@ -7,6 +7,7 @@ import intellij.kmm.settings.grind_track.core.data.RoutineRepository
 import intellij.kmm.settings.grind_track.core.data.WorkoutRepository
 import intellij.kmm.settings.grind_track.core.notifications.RestTimerAlarm
 import intellij.kmm.settings.grind_track.core.database.entity.Routine
+import intellij.kmm.settings.grind_track.core.database.entity.Side
 import intellij.kmm.settings.grind_track.core.database.entity.WorkoutSession
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -31,6 +32,8 @@ sealed interface Phase {
         val weightDraft: String,
         val repsDraft: String,
         val isLogged: Boolean = false,
+        val side: Side? = null,
+        val isInterSideRest: Boolean = false,
     ) : Phase
 
     data class RestingBeforeNextExercise(
@@ -51,6 +54,7 @@ sealed interface WorkoutUiState {
         val exercises: List<RoutineExerciseWithExercise>,
         val currentExerciseIndex: Int,
         val currentSetIndex: Int,
+        val currentSideIndex: Int,
         val phase: Phase,
     ) : WorkoutUiState {
         val currentExercise: RoutineExerciseWithExercise?
@@ -61,12 +65,21 @@ sealed interface WorkoutUiState {
 
         val isLastExercise: Boolean
             get() = currentExerciseIndex >= exercises.lastIndex
+
+        /** Current side, or null when the exercise is not unilateral. */
+        val currentSide: Side?
+            get() {
+                val ex = currentExercise ?: return null
+                if (!ex.exercise.unilateral) return null
+                val starting = ex.routineExercise.startingSide
+                return if (currentSideIndex == 0) starting else starting.other()
+            }
     }
 }
 
-private data class Position(val exerciseIndex: Int, val setIndex: Int) {
+private data class Position(val exerciseIndex: Int, val setIndex: Int, val sideIndex: Int = 0) {
     companion object {
-        val START = Position(0, 1)
+        val START = Position(0, 1, 0)
     }
 }
 
@@ -80,8 +93,8 @@ class WorkoutViewModel(
     private val position = MutableStateFlow(Position.START)
     private val phase = MutableStateFlow<Phase>(Phase.Working)
 
-    /** Last submitted weight/reps per `routineExerciseId`, used to prefill the rest form. */
-    private val lastSubmitted = mutableMapOf<Long, Pair<Double, Int>>()
+    /** Last submitted weight/reps per `(routineExerciseId, side?)`, used to prefill the rest form. */
+    private val lastSubmitted = mutableMapOf<Pair<Long, Side?>, Pair<Double, Int>>()
 
     private var timerJob: Job? = null
 
@@ -112,6 +125,7 @@ class WorkoutViewModel(
                                     exercises = exercises,
                                     currentExerciseIndex = pos.exerciseIndex,
                                     currentSetIndex = pos.setIndex,
+                                    currentSideIndex = pos.sideIndex,
                                     phase = currentPhase,
                                 )
                             }
@@ -134,16 +148,35 @@ class WorkoutViewModel(
         val current = state.value as? WorkoutUiState.InSession ?: return
         if (current.phase !is Phase.Working) return
         val exercise = current.currentExercise ?: return
-        val totalSeconds = exercise.effectiveRestSeconds
-        val (weightPrefill, repsPrefill) = lastSubmitted[exercise.routineExercise.id]
+        val unilateral = exercise.exercise.unilateral
+        val isFirstSide = unilateral && current.currentSideIndex == 0
+        val totalSeconds = if (isFirstSide) {
+            exercise.effectiveRestAfterFirstSideSeconds
+        } else {
+            exercise.effectiveRestSeconds
+        }
+        val side: Side? = current.currentSide
+        val (weightPrefill, repsPrefill) = lastSubmitted[exercise.routineExercise.id to side]
             ?: (0.0 to (exercise.routineExercise.targetReps ?: 0))
+        val weightDraft = when {
+            weightPrefill > 0.0 -> formatWeight(weightPrefill)
+            exercise.exercise.bodyWeight -> "0"
+            else -> ""
+        }
         phase.value = Phase.Resting(
             totalSeconds = totalSeconds,
             remainingSeconds = totalSeconds,
-            weightDraft = if (weightPrefill > 0.0) formatWeight(weightPrefill) else "",
+            weightDraft = weightDraft,
             repsDraft = if (repsPrefill > 0) repsPrefill.toString() else "",
+            side = side,
+            isInterSideRest = isFirstSide,
         )
-        restTimerAlarm.schedule(totalSeconds, exerciseName = exercise.exercise.name)
+        val alarmName = if (side != null) {
+            "${exercise.exercise.name} — ${sideLabel(side)}"
+        } else {
+            exercise.exercise.name
+        }
+        restTimerAlarm.schedule(totalSeconds, exerciseName = alarmName)
         startTimer(totalSeconds)
     }
 
@@ -172,25 +205,34 @@ class WorkoutViewModel(
                 setIndex = current.currentSetIndex,
                 weight = weight,
                 reps = reps,
+                side = resting.side,
             )
-            lastSubmitted[exercise.routineExercise.id] = weight to reps
+            lastSubmitted[exercise.routineExercise.id to resting.side] = weight to reps
             val stillResting = phase.value as? Phase.Resting ?: return@launch
             phase.value = stillResting.copy(isLogged = true)
         }
     }
 
     /**
-     * End the rest and advance the state machine to the next set / exercise / finish.
-     * Cancels the in-app timer and the OS rest alarm. If the user hasn't logged the
-     * set, this also serves as "skip logging".
+     * End the rest and advance the state machine. For unilateral exercises this advances
+     * from first side to second side before the regular set/exercise progression kicks in.
      */
     fun continueToNext() {
         val current = state.value as? WorkoutUiState.InSession ?: return
         when (current.phase) {
-            is Phase.Resting -> advanceFrom(current)
+            is Phase.Resting -> {
+                val exercise = current.currentExercise
+                if (exercise != null && exercise.exercise.unilateral && current.currentSideIndex == 0) {
+                    cancelTimerAndAlarm()
+                    position.value = position.value.copy(sideIndex = 1)
+                    phase.value = Phase.Working
+                } else {
+                    advanceFrom(current)
+                }
+            }
             is Phase.RestingBeforeNextExercise -> {
                 cancelTimerAndAlarm()
-                position.value = Position(current.currentExerciseIndex + 1, 1)
+                position.value = Position(current.currentExerciseIndex + 1, 1, 0)
                 phase.value = Phase.Working
             }
             Phase.Working -> Unit
@@ -213,14 +255,14 @@ class WorkoutViewModel(
         val totalSets = currentExercise.routineExercise.targetSets
         when {
             current.currentSetIndex < totalSets -> {
-                position.value = Position(current.currentExerciseIndex, current.currentSetIndex + 1)
+                position.value = Position(current.currentExerciseIndex, current.currentSetIndex + 1, 0)
                 phase.value = Phase.Working
             }
             current.currentExerciseIndex < current.exercises.lastIndex -> {
                 val nextExercise = current.exercises[current.currentExerciseIndex + 1]
                 val restSeconds = currentExercise.effectiveRestBetweenExercisesSeconds
                 if (restSeconds <= 0) {
-                    position.value = Position(current.currentExerciseIndex + 1, 1)
+                    position.value = Position(current.currentExerciseIndex + 1, 1, 0)
                     phase.value = Phase.Working
                 } else {
                     phase.value = Phase.RestingBeforeNextExercise(
@@ -276,3 +318,8 @@ class WorkoutViewModel(
 
 private fun formatWeight(weight: Double): String =
     if (weight % 1.0 == 0.0) weight.toLong().toString() else weight.toString()
+
+internal fun sideLabel(side: Side): String = when (side) {
+    Side.LEFT -> "Left"
+    Side.RIGHT -> "Right"
+}
