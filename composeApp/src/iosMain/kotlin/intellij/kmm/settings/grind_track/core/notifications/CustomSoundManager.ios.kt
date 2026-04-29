@@ -20,13 +20,26 @@ import platform.Foundation.writeToURL
 
 private const val SOUNDS_DIR_NAME = "Sounds"
 
-private const val KEY_DISPLAY_NAME = "custom_sound_display_name"
-private const val KEY_FILENAME = "custom_sound_filename"
-private const val KEY_GENERATION = "custom_sound_generation"
+private val CustomSoundKind.settingsPrefix: String
+    get() = when (this) {
+        CustomSoundKind.Notification -> "custom_sound_notification_"
+        CustomSoundKind.Alarm -> "custom_sound_alarm_"
+    }
+
+private val CustomSoundKind.filenamePrefix: String
+    get() = when (this) {
+        CustomSoundKind.Notification -> "custom_notification_v"
+        CustomSoundKind.Alarm -> "custom_alarm_v"
+    }
 
 actual class CustomSoundManager(
     private val settings: SettingsStore,
+    private val kind: CustomSoundKind,
 ) {
+    private val keyDisplayName = "${kind.settingsPrefix}display_name"
+    private val keyFilename = "${kind.settingsPrefix}filename"
+    private val keyGeneration = "${kind.settingsPrefix}generation"
+
     private val _updates = MutableStateFlow(loadCurrent())
     actual val updates: StateFlow<CustomSound?> = _updates.asStateFlow()
 
@@ -34,10 +47,10 @@ actual class CustomSoundManager(
 
     @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
     actual suspend fun install(displayName: String, bytes: ByteArray) {
-        val previousGeneration = settings.getInt(KEY_GENERATION, 0)
-        val previousFilename = settings.getString(KEY_FILENAME)
+        val previousGeneration = settings.getInt(keyGeneration, 0)
+        val previousFilename = settings.getString(keyFilename)
         val newGeneration = previousGeneration + 1
-        val newFilename = "custom_sound_v$newGeneration.wav"
+        val newFilename = "${kind.filenamePrefix}$newGeneration.wav"
 
         withContext(Dispatchers.Default) {
             val soundsDir = ensureSoundsDir()
@@ -55,23 +68,23 @@ actual class CustomSoundManager(
             }
         }
 
-        settings.putString(KEY_DISPLAY_NAME, displayName)
-        settings.putString(KEY_FILENAME, newFilename)
-        settings.putInt(KEY_GENERATION, newGeneration)
+        settings.putString(keyDisplayName, displayName)
+        settings.putString(keyFilename, newFilename)
+        settings.putInt(keyGeneration, newGeneration)
 
         _updates.value = CustomSound(displayName, newFilename)
     }
 
     @OptIn(ExperimentalForeignApi::class)
     actual fun uninstall() {
-        val filename = settings.getString(KEY_FILENAME)
+        val filename = settings.getString(keyFilename)
         if (filename != null) {
             soundsDir()?.URLByAppendingPathComponent(filename)?.let { url ->
                 NSFileManager.defaultManager.removeItemAtURL(url, error = null)
             }
         }
-        settings.putString(KEY_DISPLAY_NAME, null)
-        settings.putString(KEY_FILENAME, null)
+        settings.putString(keyDisplayName, null)
+        settings.putString(keyFilename, null)
         _updates.value = null
     }
 
@@ -100,8 +113,8 @@ actual class CustomSoundManager(
     }
 
     private fun loadCurrent(): CustomSound? {
-        val displayName = settings.getString(KEY_DISPLAY_NAME)
-        val filename = settings.getString(KEY_FILENAME)
+        val displayName = settings.getString(keyDisplayName)
+        val filename = settings.getString(keyFilename)
         return if (displayName != null && filename != null) {
             CustomSound(displayName, filename)
         } else null

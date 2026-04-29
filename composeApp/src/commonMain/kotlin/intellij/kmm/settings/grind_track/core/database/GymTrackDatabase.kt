@@ -24,7 +24,7 @@ import intellij.kmm.settings.grind_track.core.database.entity.WorkoutSession
         WorkoutSession::class,
         SetEntry::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(InstantTypeConverter::class, DayOfWeekTypeConverter::class)

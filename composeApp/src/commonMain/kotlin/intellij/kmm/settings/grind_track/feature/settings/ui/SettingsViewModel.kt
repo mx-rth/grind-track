@@ -6,32 +6,50 @@ import intellij.kmm.settings.grind_track.core.notifications.CustomSound
 import intellij.kmm.settings.grind_track.core.notifications.CustomSoundManager
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 data class SettingsUiState(
-    val currentSound: CustomSound? = null,
+    val notificationSound: CustomSound? = null,
+    val alarmSound: CustomSound? = null,
 )
 
 class SettingsViewModel(
-    private val customSoundManager: CustomSoundManager,
+    private val notificationSoundManager: CustomSoundManager,
+    private val alarmSoundManager: CustomSoundManager,
 ) : ViewModel() {
-    val state: StateFlow<SettingsUiState> = customSoundManager.updates
-        .map { SettingsUiState(currentSound = it) }
-        .stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5_000),
-            SettingsUiState(currentSound = customSoundManager.current()),
-        )
+    val state: StateFlow<SettingsUiState> = combine(
+        notificationSoundManager.updates,
+        alarmSoundManager.updates,
+    ) { notification, alarm ->
+        SettingsUiState(notificationSound = notification, alarmSound = alarm)
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        SettingsUiState(
+            notificationSound = notificationSoundManager.current(),
+            alarmSound = alarmSoundManager.current(),
+        ),
+    )
 
-    fun installSound(picked: PickedSoundFile) {
+    fun installNotificationSound(picked: PickedSoundFile) {
         viewModelScope.launch {
-            customSoundManager.install(picked.displayName, picked.bytes)
+            notificationSoundManager.install(picked.displayName, picked.bytes)
         }
     }
 
-    fun resetToDefault() {
-        customSoundManager.uninstall()
+    fun resetNotificationSound() {
+        notificationSoundManager.uninstall()
+    }
+
+    fun installAlarmSound(picked: PickedSoundFile) {
+        viewModelScope.launch {
+            alarmSoundManager.install(picked.displayName, picked.bytes)
+        }
+    }
+
+    fun resetAlarmSound() {
+        alarmSoundManager.uninstall()
     }
 }

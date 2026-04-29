@@ -20,9 +20,14 @@ import kotlinx.coroutines.launch
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
+import org.koin.core.qualifier.named
 import org.koin.dsl.KoinAppDeclaration
 import org.koin.dsl.module
 import org.koin.mp.KoinPlatformTools
+
+/** Koin qualifier names for the two `CustomSoundManager` instances (one per kind). */
+const val CUSTOM_SOUND_NOTIFICATION = "custom_sound_notification"
+const val CUSTOM_SOUND_ALARM = "custom_sound_alarm"
 
 val appModule: Module = module {
     single<GymTrackDatabase> {
@@ -55,7 +60,12 @@ val appModule: Module = module {
     viewModel { (routineId: Long) -> RoutineEditorViewModel(routineId, get(), get()) }
     viewModel { WorkoutViewModel(get(), get(), get()) }
     viewModel { ProgressViewModel(get()) }
-    viewModel { SettingsViewModel(get()) }
+    viewModel {
+        SettingsViewModel(
+            notificationSoundManager = get(named(CUSTOM_SOUND_NOTIFICATION)),
+            alarmSoundManager = get(named(CUSTOM_SOUND_ALARM)),
+        )
+    }
 }
 
 expect fun platformModule(): Module

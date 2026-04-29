@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
@@ -22,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import intellij.kmm.settings.grind_track.core.notifications.CustomSound
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -31,7 +34,9 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val pickSoundFile = rememberSoundFilePicker(onPicked = viewModel::installSound)
+    val pickNotificationSound =
+        rememberSoundFilePicker(onPicked = viewModel::installNotificationSound)
+    val pickAlarmSound = rememberSoundFilePicker(onPicked = viewModel::installAlarmSound)
 
     Scaffold(
         topBar = {
@@ -46,45 +51,90 @@ fun SettingsScreen(
         },
     ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            Text(
-                "Notification sound",
-                style = MaterialTheme.typography.titleMedium,
+            SoundSection(
+                sectionTitle = "Notification sound",
+                description = "Plays when the rest timer ends.",
+                currentSound = state.notificationSound,
+                defaultLabel = "Default chime",
+                onPick = pickNotificationSound,
+                onReset = viewModel::resetNotificationSound,
+                showThirtySecondHint = false,
             )
-            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        text = "Current sound",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = state.currentSound?.displayName ?: "Default alarm tone",
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                }
-            }
-            Button(
-                onClick = pickSoundFile,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Pick a .wav file")
-            }
-            OutlinedButton(
-                onClick = viewModel::resetToDefault,
-                enabled = state.currentSound != null,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Reset to default")
-            }
+            SoundSection(
+                sectionTitle = "Alarm sound",
+                description = "Plays 15 seconds after the rest timer ends.",
+                currentSound = state.alarmSound,
+                defaultLabel = "Default alarm tone",
+                onPick = pickAlarmSound,
+                onReset = viewModel::resetAlarmSound,
+                showThirtySecondHint = true,
+            )
             Text(
-                text = "iOS plays sounds up to 30 seconds. Files larger than that fall back " +
-                    "to the default tone.",
+                text = "iOS plays sounds up to 30 seconds. Files larger than that fall " +
+                    "back to the default tone.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SoundSection(
+    sectionTitle: String,
+    description: String,
+    currentSound: CustomSound?,
+    defaultLabel: String,
+    onPick: () -> Unit,
+    onReset: () -> Unit,
+    showThirtySecondHint: Boolean,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = sectionTitle,
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = "Current sound",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = currentSound?.displayName ?: defaultLabel,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            }
+        }
+        Button(onClick = onPick, modifier = Modifier.fillMaxWidth()) {
+            Text("Pick a .wav file")
+        }
+        OutlinedButton(
+            onClick = onReset,
+            enabled = currentSound != null,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Reset to default")
+        }
+        if (showThirtySecondHint) {
+            Text(
+                text = "Tip: keep this clip under 30 seconds — iOS won't play longer files.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
