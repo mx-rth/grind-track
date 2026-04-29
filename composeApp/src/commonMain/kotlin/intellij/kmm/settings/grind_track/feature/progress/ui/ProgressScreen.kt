@@ -82,8 +82,6 @@ private data class Achievement(
     val id: String,
     val name: String,
     val howToObtain: String,
-    val isObtained: Boolean = false,
-    val obtainedDate: String? = null,
     val imageRes: DrawableResource,
 )
 
@@ -92,8 +90,6 @@ private val allAchievements = listOf(
         id = "7day_streak",
         name = "Boot Sequence",
         howToObtain = "Reach a 7-day streak by completing 7 consecutive planned workouts.",
-        isObtained = true,
-        obtainedDate = "April 14, 2026",
         imageRes = Res.drawable.achievement_7day_streak,
     ),
     Achievement(
@@ -112,20 +108,18 @@ private val allAchievements = listOf(
         id = "consistency",
         name = "Peaked",
         howToObtain = "Decrease your max weight on any exercise by 20% compared to your last logged session.",
-        isObtained = true,
-        obtainedDate = "April 22, 2026",
         imageRes = Res.drawable.achievement_consistency,
     ),
     Achievement(
         id = "speed",
         name = "David Martinez",
-        howToObtain = "Complete a time-based workout 20% faster for the same logged distance.",
+        howToObtain = "For a time-based exercise, complete it 20% faster than your first logged session.",
         imageRes = Res.drawable.achievement_speed,
     ),
     Achievement(
         id = "milestone",
         name = "Extra Mile",
-        howToObtain = "Complete a 20% longer distance than your last logged workout.",
+        howToObtain = "For a distance-based exercise, log 20% more distance than your first logged session.",
         imageRes = Res.drawable.achievement_milestone,
     ),
 )
@@ -142,6 +136,7 @@ fun ProgressScreen(
     if (showAchievements) {
         AchievementsDialog(
             achievements = allAchievements,
+            achievementStatuses = state.achievementStatuses,
             onDismiss = { showAchievements = false },
             onSelectAchievement = { selectedAchievement = it },
         )
@@ -149,6 +144,7 @@ fun ProgressScreen(
     selectedAchievement?.let { achievement ->
         AchievementDetailDialog(
             achievement = achievement,
+            status = state.achievementStatuses[achievement.id] ?: AchievementStatus(false),
             onDismiss = { selectedAchievement = null },
         )
     }
@@ -204,6 +200,7 @@ fun ProgressScreen(
 @Composable
 private fun AchievementsDialog(
     achievements: List<Achievement>,
+    achievementStatuses: Map<String, AchievementStatus>,
     onDismiss: () -> Unit,
     onSelectAchievement: (Achievement) -> Unit,
 ) {
@@ -221,8 +218,10 @@ private fun AchievementsDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(achievements, key = { it.id }) { achievement ->
+                    val isObtained = achievementStatuses[achievement.id]?.isObtained == true
                     AchievementGridItem(
                         achievement = achievement,
+                        isObtained = isObtained,
                         onClick = { onSelectAchievement(achievement) },
                     )
                 }
@@ -234,6 +233,7 @@ private fun AchievementsDialog(
 @Composable
 private fun AchievementGridItem(
     achievement: Achievement,
+    isObtained: Boolean,
     onClick: () -> Unit,
 ) {
     Column(
@@ -249,7 +249,7 @@ private fun AchievementGridItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f),
-            alpha = if (achievement.isObtained) 1f else 0.5f,
+            alpha = if (isObtained) 1f else 0.5f,
         )
         Text(
             text = achievement.name,
@@ -264,6 +264,7 @@ private fun AchievementGridItem(
 @Composable
 private fun AchievementDetailDialog(
     achievement: Achievement,
+    status: AchievementStatus,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -281,7 +282,7 @@ private fun AchievementDetailDialog(
                     modifier = Modifier
                         .size(100.dp)
                         .align(Alignment.CenterHorizontally),
-                    alpha = if (achievement.isObtained) 1f else 0.5f,
+                    alpha = if (status.isObtained) 1f else 0.5f,
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
@@ -295,26 +296,20 @@ private fun AchievementDetailDialog(
                     )
                 }
                 Spacer(modifier = Modifier.height(0.dp))
-                if (achievement.isObtained) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Status",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    if (status.isObtained) {
+                        val dateText = status.obtainedDate?.let { formatDate(it) } ?: "Unlocked"
                         Text(
-                            text = "Status",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Text(
-                            text = "Unlocked on ${achievement.obtainedDate}",
+                            text = "Unlocked on $dateText",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.secondary,
                         )
-                    }
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(
-                            text = "Status",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
+                    } else {
                         Text(
                             text = "Not yet unlocked",
                             style = MaterialTheme.typography.bodyMedium,

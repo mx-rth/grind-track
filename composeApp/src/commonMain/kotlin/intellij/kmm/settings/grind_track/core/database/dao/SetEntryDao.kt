@@ -5,8 +5,21 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import intellij.kmm.settings.grind_track.core.database.entity.Exercise
+import intellij.kmm.settings.grind_track.core.database.entity.ExerciseType
 import intellij.kmm.settings.grind_track.core.database.entity.SetEntry
+import intellij.kmm.settings.grind_track.core.database.entity.Side
 import kotlinx.coroutines.flow.Flow
+import kotlinx.datetime.Instant
+
+data class SetEntryRow(
+    val exerciseId: Long,
+    val exerciseType: ExerciseType,
+    val sessionId: Long,
+    val weight: Double,
+    val distanceMeters: Int?,
+    val durationSeconds: Double?,
+    val completedAt: Instant,
+)
 
 @Dao
 interface SetEntryDao {
@@ -42,4 +55,16 @@ interface SetEntryDao {
         """
     )
     fun observeHistoryForExercise(exerciseId: Long): Flow<List<SetEntry>>
+
+    @Query(
+        """
+        SELECT re.exerciseId, e.type AS exerciseType, se.sessionId, se.weight,
+               se.distanceMeters, se.durationSeconds, se.completedAt
+        FROM set_entry se
+        INNER JOIN routine_exercise re ON re.id = se.routineExerciseId
+        INNER JOIN exercise e ON e.id = re.exerciseId
+        ORDER BY se.completedAt ASC
+        """
+    )
+    fun observeAllWithExerciseType(): Flow<List<SetEntryRow>>
 }

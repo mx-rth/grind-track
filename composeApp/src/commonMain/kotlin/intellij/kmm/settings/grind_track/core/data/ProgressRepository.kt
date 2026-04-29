@@ -2,6 +2,7 @@ package intellij.kmm.settings.grind_track.core.data
 
 import intellij.kmm.settings.grind_track.core.database.dao.RoutineDao
 import intellij.kmm.settings.grind_track.core.database.dao.SetEntryDao
+import intellij.kmm.settings.grind_track.core.database.dao.SetEntryRow
 import intellij.kmm.settings.grind_track.core.database.dao.WorkoutSessionDao
 import intellij.kmm.settings.grind_track.core.database.entity.Exercise
 import intellij.kmm.settings.grind_track.core.database.entity.Routine
@@ -30,6 +31,9 @@ class ProgressRepository(
 
     fun observeHistoryForExercise(exerciseId: Long): Flow<List<SetEntry>> =
         setEntryDao.observeHistoryForExercise(exerciseId)
+
+    fun observeAllWithExerciseType(): Flow<List<SetEntryRow>> =
+        setEntryDao.observeAllWithExerciseType()
 
     fun observeWidgetData(): Flow<WorkoutWidgetData> = combine(
         routineDao.observeAll(),
