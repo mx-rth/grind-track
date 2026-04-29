@@ -19,6 +19,7 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -44,6 +45,9 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import grind_track.composeapp.generated.resources.Res
+import grind_track.composeapp.generated.resources.ic_flame
+import org.jetbrains.compose.resources.painterResource
 import intellij.kmm.settings.grind_track.core.database.entity.Exercise
 import intellij.kmm.settings.grind_track.core.database.entity.SetEntry
 import intellij.kmm.settings.grind_track.core.designsystem.EmptyState
@@ -71,7 +75,11 @@ fun ProgressScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
-                            Text("🔥", style = MaterialTheme.typography.titleMedium)
+                            Icon(
+                                painter = painterResource(Res.drawable.ic_flame),
+                                contentDescription = "Streak",
+                                tint = Color(0xFFFF6600),
+                            )
                             Text(
                                 text = state.streak.toString(),
                                 style = MaterialTheme.typography.titleMedium,
