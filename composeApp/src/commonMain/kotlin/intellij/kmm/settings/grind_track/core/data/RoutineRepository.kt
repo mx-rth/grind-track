@@ -61,6 +61,8 @@ class RoutineRepository(
         restAfterFirstSideSecondsOverride: Int? = null,
         startingSide: intellij.kmm.settings.grind_track.core.database.entity.Side =
             intellij.kmm.settings.grind_track.core.database.entity.Side.LEFT,
+        targetDistanceMeters: Int? = null,
+        targetDurationSeconds: Double? = null,
     ): Long {
         val nextPosition = routineExerciseDao.maxPosition(routineId) + 1
         return routineExerciseDao.insert(
@@ -74,6 +76,8 @@ class RoutineRepository(
                 restBetweenExercisesOverride = restBetweenExercisesOverride,
                 restAfterFirstSideSecondsOverride = restAfterFirstSideSecondsOverride,
                 startingSide = startingSide,
+                targetDistanceMeters = targetDistanceMeters,
+                targetDurationSeconds = targetDurationSeconds,
             )
         )
     }

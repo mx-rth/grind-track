@@ -50,6 +50,7 @@ import grind_track.composeapp.generated.resources.Res
 import grind_track.composeapp.generated.resources.ic_flame
 import org.jetbrains.compose.resources.painterResource
 import intellij.kmm.settings.grind_track.core.database.entity.Exercise
+import intellij.kmm.settings.grind_track.core.database.entity.ExerciseType
 import intellij.kmm.settings.grind_track.core.database.entity.SetEntry
 import intellij.kmm.settings.grind_track.core.database.entity.Side
 import intellij.kmm.settings.grind_track.core.designsystem.EmptyState
@@ -127,9 +128,14 @@ private fun LoadedContent(
             )
         } else {
             val selectedExercise = state.exercises.firstOrNull { it.id == state.selectedExerciseId }
+            val type = selectedExercise?.type ?: ExerciseType.STRENGTH
             val hideWeightChart = selectedExercise?.bodyWeight == true &&
                 state.history.all { it.weight == 0.0 }
-            HistoryList(history = state.history, hideWeightChart = hideWeightChart)
+            HistoryList(
+                history = state.history,
+                type = type,
+                hideWeightChart = hideWeightChart,
+            )
         }
     }
 }
@@ -155,7 +161,11 @@ private fun ExercisePicker(
 }
 
 @Composable
-private fun HistoryList(history: List<SetEntry>, hideWeightChart: Boolean = false) {
+private fun HistoryList(
+    history: List<SetEntry>,
+    type: ExerciseType,
+    hideWeightChart: Boolean = false,
+) {
     val timeZone = TimeZone.currentSystemDefault()
     val grouped = history.groupBy { entry ->
         entry.completedAt.toLocalDateTime(timeZone).date
@@ -171,31 +181,54 @@ private fun HistoryList(history: List<SetEntry>, hideWeightChart: Boolean = fals
         dateOccurrences[date] = count
         if (count == 1) shortDate(date) else "${shortDate(date)} ($count)"
     }
-    val weightBySession: List<Pair<String, List<Double>>> = sessionGroups.mapIndexed { i, (_, entries) ->
-        sessionLabels[i] to entries.map { it.weight }
-    }
-    val hasUnilateral = history.any { it.side != null }
-    val repsBySession: List<RepsBarData> = sessionGroups.mapIndexed { i, (_, entries) ->
-        RepsBarData(
-            label = sessionLabels[i],
-            total = entries.sumOf { it.reps },
-            leftReps = entries.filter { it.side == Side.LEFT }.sumOf { it.reps },
-            rightReps = entries.filter { it.side == Side.RIGHT }.sumOf { it.reps },
-        )
-    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (!hideWeightChart) {
-            item(key = "weight_chart") {
-                WeightProgressionChart(dataPoints = weightBySession)
+        when (type) {
+            ExerciseType.STRENGTH -> {
+                val weightBySession: List<Pair<String, List<Double>>> =
+                    sessionGroups.mapIndexed { i, (_, entries) ->
+                        sessionLabels[i] to entries.map { it.weight }
+                    }
+                val hasUnilateral = history.any { it.side != null }
+                val repsBySession: List<RepsBarData> = sessionGroups.mapIndexed { i, (_, entries) ->
+                    RepsBarData(
+                        label = sessionLabels[i],
+                        total = entries.sumOf { it.reps },
+                        leftReps = entries.filter { it.side == Side.LEFT }.sumOf { it.reps },
+                        rightReps = entries.filter { it.side == Side.RIGHT }.sumOf { it.reps },
+                    )
+                }
+                if (!hideWeightChart) {
+                    item(key = "weight_chart") {
+                        WeightProgressionChart(dataPoints = weightBySession)
+                    }
+                }
+                item(key = "reps_chart") {
+                    RepsBarChart(dataPoints = repsBySession, hasUnilateral = hasUnilateral)
+                }
             }
-        }
-        item(key = "reps_chart") {
-            RepsBarChart(dataPoints = repsBySession, hasUnilateral = hasUnilateral)
+            ExerciseType.DISTANCE -> {
+                val distanceBySession: List<Pair<String, List<Int>>> =
+                    sessionGroups.mapIndexed { i, (_, entries) ->
+                        sessionLabels[i] to entries.mapNotNull { it.distanceMeters }
+                    }
+                item(key = "distance_chart") {
+                    DistanceProgressionChart(dataPoints = distanceBySession)
+                }
+            }
+            ExerciseType.TIME -> {
+                val durationBySession: List<Pair<String, List<Double>>> =
+                    sessionGroups.mapIndexed { i, (_, entries) ->
+                        sessionLabels[i] to entries.mapNotNull { it.durationSeconds }
+                    }
+                item(key = "time_chart") {
+                    TimeProgressionChart(dataPoints = durationBySession)
+                }
+            }
         }
         grouped.forEach { (date, entries) ->
             item(key = date.toString()) {
@@ -205,9 +238,9 @@ private fun HistoryList(history: List<SetEntry>, hideWeightChart: Boolean = fals
                             text = formatDate(date),
                             style = MaterialTheme.typography.titleMedium,
                         )
-                        entries.forEachIndexed { idx, entry ->
+                        entries.sortedBy { it.completedAt }.forEachIndexed { idx, entry ->
                             val displayIndex = if (entry.side != null) entry.setIndex else idx + 1
-                            SetEntryRow(index = displayIndex, entry = entry)
+                            SetEntryRow(index = displayIndex, entry = entry, type = type)
                         }
                     }
                 }
@@ -526,7 +559,7 @@ private fun LegendDot(color: Color, label: String) {
 }
 
 @Composable
-private fun SetEntryRow(index: Int, entry: SetEntry) {
+private fun SetEntryRow(index: Int, entry: SetEntry, type: ExerciseType) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -550,7 +583,11 @@ private fun SetEntryRow(index: Int, entry: SetEntry) {
             }
         }
         Text(
-            text = "${formatWeight(entry.weight)} × ${entry.reps}",
+            text = when (type) {
+                ExerciseType.STRENGTH -> "${formatWeight(entry.weight)} × ${entry.reps}"
+                ExerciseType.DISTANCE -> entry.distanceMeters?.let { formatMetersDisplay(it) } ?: "—"
+                ExerciseType.TIME -> entry.durationSeconds?.let { formatDurationDisplay(it) } ?: "—"
+            },
             style = MaterialTheme.typography.bodyLarge,
         )
     }
@@ -563,6 +600,214 @@ private fun sideAbbreviation(side: Side): String = when (side) {
 
 private fun formatWeight(weight: Double): String =
     if (weight % 1.0 == 0.0) weight.toLong().toString() else weight.toString()
+
+private fun formatMetersDisplay(meters: Int): String =
+    if (meters >= 1000) {
+        val km = meters / 1000.0
+        val s = if (km % 1.0 == 0.0) km.toInt().toString() else km.toString()
+        "$s km"
+    } else {
+        "$meters m"
+    }
+
+private fun formatDurationDisplay(seconds: Double): String {
+    if (seconds < 60.0) {
+        val tenths = (seconds * 10).roundToInt()
+        val whole = tenths / 10
+        val frac = tenths % 10
+        return if (frac == 0) "$whole s" else "$whole.$frac s"
+    }
+    val totalWholeSeconds = seconds.roundToInt()
+    val mins = totalWholeSeconds / 60
+    val secs = totalWholeSeconds - mins * 60
+    val secsStr = if (secs < 10) "0$secs" else secs.toString()
+    return "$mins:$secsStr"
+}
+
+private enum class DistanceMode(val label: String) {
+    Max("Max"),
+    Average("Average"),
+    FirstSet("First Set"),
+}
+
+@Composable
+private fun DistanceProgressionChart(dataPoints: List<Pair<String, List<Int>>>) {
+    var mode by remember { mutableStateOf(DistanceMode.Max) }
+    var dropdownExpanded by remember { mutableStateOf(false) }
+    val resolvedData: List<Pair<String, Double>> = dataPoints.map { (label, distances) ->
+        label to when (mode) {
+            DistanceMode.Max -> (distances.maxOrNull() ?: 0).toDouble()
+            DistanceMode.Average -> if (distances.isEmpty()) 0.0 else distances.average()
+            DistanceMode.FirstSet -> (distances.firstOrNull() ?: 0).toDouble()
+        }
+    }
+    MetricLineChartCard(
+        title = "Distance Progression",
+        modeLabel = mode.label,
+        onClickMode = { dropdownExpanded = true },
+        dropdown = {
+            DropdownMenu(
+                expanded = dropdownExpanded,
+                onDismissRequest = { dropdownExpanded = false },
+            ) {
+                DistanceMode.entries.forEach { m ->
+                    DropdownMenuItem(
+                        text = { Text(m.label) },
+                        onClick = { mode = m; dropdownExpanded = false },
+                    )
+                }
+            }
+        },
+        dataPoints = resolvedData,
+        yLabelFormatter = { v -> formatMetersDisplay(v.roundToInt()) },
+    )
+}
+
+private enum class TimeMode(val label: String) {
+    Best("Best"),
+    Average("Average"),
+    FirstSet("First Set"),
+}
+
+@Composable
+private fun TimeProgressionChart(dataPoints: List<Pair<String, List<Double>>>) {
+    var mode by remember { mutableStateOf(TimeMode.Best) }
+    var dropdownExpanded by remember { mutableStateOf(false) }
+    val resolvedData: List<Pair<String, Double>> = dataPoints.map { (label, times) ->
+        label to when (mode) {
+            TimeMode.Best -> times.minOrNull() ?: 0.0
+            TimeMode.Average -> if (times.isEmpty()) 0.0 else times.average()
+            TimeMode.FirstSet -> times.firstOrNull() ?: 0.0
+        }
+    }
+    MetricLineChartCard(
+        title = "Time Progression",
+        modeLabel = mode.label,
+        onClickMode = { dropdownExpanded = true },
+        dropdown = {
+            DropdownMenu(
+                expanded = dropdownExpanded,
+                onDismissRequest = { dropdownExpanded = false },
+            ) {
+                TimeMode.entries.forEach { m ->
+                    DropdownMenuItem(
+                        text = { Text(m.label) },
+                        onClick = { mode = m; dropdownExpanded = false },
+                    )
+                }
+            }
+        },
+        dataPoints = resolvedData,
+        yLabelFormatter = { v ->
+            val snapped = (v * 2).roundToInt() / 2.0
+            formatDurationDisplay(snapped)
+        },
+    )
+}
+
+@Composable
+private fun MetricLineChartCard(
+    title: String,
+    modeLabel: String,
+    onClickMode: () -> Unit,
+    dropdown: @Composable () -> Unit,
+    dataPoints: List<Pair<String, Double>>,
+    yLabelFormatter: (Double) -> String,
+) {
+    val textMeasurer = rememberTextMeasurer()
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val outlineVariantColor = MaterialTheme.colorScheme.outlineVariant
+
+    val n = dataPoints.size
+    val maxV = if (n > 0) dataPoints.maxOf { it.second } else 0.0
+    val minV = if (n > 0) dataPoints.minOf { it.second } else 0.0
+    val rangePad = if (maxV == minV) 10.0 else (maxV - minV) * 0.15
+    val displayMin = (minV - rangePad).coerceAtLeast(0.0)
+    val displayMax = maxV + rangePad
+    val range = (displayMax - displayMin).coerceAtLeast(0.001)
+
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                Box {
+                    TextButton(
+                        onClick = onClickMode,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    ) {
+                        Text(modeLabel, style = MaterialTheme.typography.labelMedium)
+                    }
+                    dropdown()
+                }
+            }
+            Canvas(modifier = Modifier.fillMaxWidth().height(150.dp)) {
+                val leftPad = 64.dp.toPx()
+                val rightPad = 12.dp.toPx()
+                val topPad = 4.dp.toPx()
+                val bottomPad = 28.dp.toPx()
+                val cw = size.width - leftPad - rightPad
+                val ch = size.height - topPad - bottomPad
+
+                for (i in 0..3) {
+                    val frac = i.toFloat() / 3f
+                    val y = topPad + ch * (1f - frac)
+                    drawLine(
+                        color = outlineVariantColor.copy(alpha = 0.5f),
+                        start = Offset(leftPad, y),
+                        end = Offset(leftPad + cw, y),
+                        strokeWidth = 1f,
+                    )
+                    val labelText = yLabelFormatter(displayMin + range * frac)
+                    val measured = textMeasurer.measure(labelText, TextStyle(fontSize = 9.sp))
+                    drawText(
+                        measured,
+                        color = onSurfaceVariantColor,
+                        topLeft = Offset(leftPad - measured.size.width - 4.dp.toPx(), y - measured.size.height / 2f),
+                    )
+                }
+
+                val hPad = 16.dp.toPx()
+                val xs = if (n <= 1) {
+                    FloatArray(n) { leftPad + cw / 2f }
+                } else {
+                    FloatArray(n) { i -> leftPad + hPad + i.toFloat() / (n - 1).toFloat() * (cw - 2 * hPad) }
+                }
+
+                val labelStep = ((n.toFloat() / 5f).coerceAtLeast(1f)).toInt()
+                for (i in 0 until n step labelStep) {
+                    val measured = textMeasurer.measure(dataPoints[i].first, TextStyle(fontSize = 9.sp))
+                    drawText(
+                        measured,
+                        color = onSurfaceVariantColor,
+                        topLeft = Offset(xs[i] - measured.size.width / 2f, topPad + ch + 4.dp.toPx()),
+                    )
+                }
+
+                if (n > 1) {
+                    val path = Path()
+                    for (i in 0 until n) {
+                        val frac = ((dataPoints[i].second - displayMin) / range).toFloat().coerceIn(0f, 1f)
+                        val y = topPad + ch * (1f - frac)
+                        if (i == 0) path.moveTo(xs[i], y) else path.lineTo(xs[i], y)
+                    }
+                    drawPath(path, primaryColor, style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round))
+                }
+
+                for (i in 0 until n) {
+                    val frac = ((dataPoints[i].second - displayMin) / range).toFloat().coerceIn(0f, 1f)
+                    val y = topPad + ch * (1f - frac)
+                    drawCircle(primaryColor, radius = 4.dp.toPx(), center = Offset(xs[i], y))
+                    drawCircle(Color.White, radius = 2.dp.toPx(), center = Offset(xs[i], y))
+                }
+            }
+        }
+    }
+}
 
 private fun formatDate(date: LocalDate): String {
     val month = date.month.name.lowercase().replaceFirstChar { it.uppercase() }

@@ -33,4 +33,6 @@ data class SetEntry(
     val reps: Int,
     val completedAt: Instant,
     val side: Side? = null,
+    val distanceMeters: Int? = null,
+    val durationSeconds: Double? = null,
 )

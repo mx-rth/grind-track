@@ -2,6 +2,7 @@ package intellij.kmm.settings.grind_track.core.data
 
 import intellij.kmm.settings.grind_track.core.database.dao.ExerciseDao
 import intellij.kmm.settings.grind_track.core.database.entity.Exercise
+import intellij.kmm.settings.grind_track.core.database.entity.ExerciseType
 import kotlinx.coroutines.flow.Flow
 
 class ExerciseRepository(
@@ -16,6 +17,7 @@ class ExerciseRepository(
         unilateral: Boolean = false,
         defaultRestAfterFirstSideSeconds: Int = 60,
         bodyWeight: Boolean = false,
+        type: ExerciseType = ExerciseType.STRENGTH,
     ): Long = dao.insert(
         Exercise(
             name = name.trim(),
@@ -24,6 +26,7 @@ class ExerciseRepository(
             unilateral = unilateral,
             defaultRestAfterFirstSideSeconds = defaultRestAfterFirstSideSeconds,
             bodyWeight = bodyWeight,
+            type = type,
         )
     )
 

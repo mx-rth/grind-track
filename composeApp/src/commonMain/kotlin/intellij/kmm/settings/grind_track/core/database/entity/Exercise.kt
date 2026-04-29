@@ -13,4 +13,5 @@ data class Exercise(
     val unilateral: Boolean = false,
     val defaultRestAfterFirstSideSeconds: Int = 60,
     val bodyWeight: Boolean = false,
+    val type: ExerciseType = ExerciseType.STRENGTH,
 )

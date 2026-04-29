@@ -29,9 +29,11 @@ class WorkoutRepository(
         sessionId: Long,
         routineExerciseId: Long,
         setIndex: Int,
-        weight: Double,
-        reps: Int,
+        weight: Double = 0.0,
+        reps: Int = 0,
         side: Side? = null,
+        distanceMeters: Int? = null,
+        durationSeconds: Double? = null,
     ): Long = setEntryDao.insert(
         SetEntry(
             sessionId = sessionId,
@@ -41,6 +43,8 @@ class WorkoutRepository(
             reps = reps,
             completedAt = Clock.System.now(),
             side = side,
+            distanceMeters = distanceMeters,
+            durationSeconds = durationSeconds,
         )
     )
 }

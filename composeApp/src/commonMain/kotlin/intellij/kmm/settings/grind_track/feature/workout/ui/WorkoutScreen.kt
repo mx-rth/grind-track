@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import intellij.kmm.settings.grind_track.core.data.RoutineExerciseWithExercise
+import intellij.kmm.settings.grind_track.core.database.entity.ExerciseType
 import intellij.kmm.settings.grind_track.core.database.entity.Routine
 import intellij.kmm.settings.grind_track.core.database.entity.Side
 import intellij.kmm.settings.grind_track.core.designsystem.EmptyState
@@ -128,7 +129,7 @@ private fun RoutinePickerRow(routine: Routine, onClick: () -> Unit) {
 private fun InSessionContent(
     state: WorkoutUiState.InSession,
     onMarkSetComplete: () -> Unit,
-    onUpdateRestForm: (weight: String, reps: String) -> Unit,
+    onUpdateRestForm: (weight: String, reps: String, distance: String, duration: String) -> Unit,
     onLogSet: () -> Unit,
     onContinueToNext: () -> Unit,
     onFinish: () -> Unit,
@@ -173,7 +174,7 @@ private fun InSessionContent(
                 )
             }
             Text(
-                text = repsLabel(current),
+                text = targetLabel(current),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -200,6 +201,7 @@ private fun InSessionContent(
                     }
                     is Phase.Resting -> RestingControls(
                         phase = phase,
+                        type = current.exercise.type,
                         weightLabel = if (current.exercise.bodyWeight) "Added weight" else "Weight",
                         onUpdateForm = onUpdateRestForm,
                         onLogSet = onLogSet,
@@ -303,8 +305,9 @@ private fun WorkingControls(
 @Composable
 private fun RestingControls(
     phase: Phase.Resting,
+    type: ExerciseType,
     weightLabel: String,
-    onUpdateForm: (weight: String, reps: String) -> Unit,
+    onUpdateForm: (weight: String, reps: String, distance: String, duration: String) -> Unit,
     onLogSet: () -> Unit,
     onContinue: () -> Unit,
 ) {
@@ -342,34 +345,66 @@ private fun RestingControls(
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = phase.weightDraft,
-                onValueChange = { onUpdateForm(it, phase.repsDraft) },
-                label = { Text(weightLabel) },
-                enabled = !phase.isLogged,
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                    keyboardType = KeyboardType.Decimal,
-                ),
-                singleLine = true,
-                modifier = Modifier.weight(1f),
-            )
-            OutlinedTextField(
-                value = phase.repsDraft,
-                onValueChange = { onUpdateForm(phase.weightDraft, it) },
-                label = { Text("Reps") },
+        when (type) {
+            ExerciseType.STRENGTH -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = phase.weightDraft,
+                    onValueChange = {
+                        onUpdateForm(it, phase.repsDraft, phase.distanceDraft, phase.durationDraft)
+                    },
+                    label = { Text(weightLabel) },
+                    enabled = !phase.isLogged,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal,
+                    ),
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+                OutlinedTextField(
+                    value = phase.repsDraft,
+                    onValueChange = {
+                        onUpdateForm(phase.weightDraft, it, phase.distanceDraft, phase.durationDraft)
+                    },
+                    label = { Text("Reps") },
+                    enabled = !phase.isLogged,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                    ),
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            ExerciseType.DISTANCE -> OutlinedTextField(
+                value = phase.distanceDraft,
+                onValueChange = {
+                    onUpdateForm(phase.weightDraft, phase.repsDraft, it, phase.durationDraft)
+                },
+                label = { Text("Distance (m)") },
                 enabled = !phase.isLogged,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                     keyboardType = KeyboardType.Number,
                 ),
                 singleLine = true,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            ExerciseType.TIME -> OutlinedTextField(
+                value = phase.durationDraft,
+                onValueChange = {
+                    onUpdateForm(phase.weightDraft, phase.repsDraft, phase.distanceDraft, it)
+                },
+                label = { Text("Time (s)") },
+                enabled = !phase.isLogged,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    keyboardType = KeyboardType.Decimal,
+                ),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
         Box(modifier = Modifier.weight(1f))
         Button(
             onClick = onLogSet,
-            enabled = !phase.isLogged && isSubmittable(phase),
+            enabled = !phase.isLogged && isSubmittable(phase, type),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(if (phase.isLogged) "Logged ✓" else "Log set")
@@ -401,13 +436,55 @@ private fun EmptyExerciseList(onFinish: () -> Unit) {
     }
 }
 
-private fun repsLabel(item: RoutineExerciseWithExercise): String {
-    val reps = item.routineExercise.targetReps
-    return if (reps == null) "Reps: to failure" else "Target: $reps reps"
+private fun targetLabel(item: RoutineExerciseWithExercise): String {
+    return when (item.exercise.type) {
+        ExerciseType.STRENGTH -> {
+            val reps = item.routineExercise.targetReps
+            if (reps == null) "Reps: to failure" else "Target: $reps reps"
+        }
+        ExerciseType.DISTANCE -> {
+            val seconds = item.routineExercise.targetDurationSeconds
+            if (seconds == null) "Run as long as you can" else "Target time: ${formatDurationSeconds(seconds)}"
+        }
+        ExerciseType.TIME -> {
+            val meters = item.routineExercise.targetDistanceMeters
+            if (meters == null) "Cover the distance" else "Target distance: ${formatMeters(meters)}"
+        }
+    }
 }
 
-private fun isSubmittable(phase: Phase.Resting): Boolean {
-    val weight = phase.weightDraft.toDoubleOrNull() ?: return false
-    val reps = phase.repsDraft.toIntOrNull() ?: return false
-    return weight >= 0.0 && reps > 0
+private fun isSubmittable(phase: Phase.Resting, type: ExerciseType): Boolean = when (type) {
+    ExerciseType.STRENGTH -> {
+        val w = phase.weightDraft.toDoubleOrNull()
+        val r = phase.repsDraft.toIntOrNull()
+        w != null && w >= 0.0 && r != null && r > 0
+    }
+    ExerciseType.DISTANCE -> {
+        val d = phase.distanceDraft.toIntOrNull()
+        d != null && d > 0
+    }
+    ExerciseType.TIME -> {
+        val t = phase.durationDraft.toDoubleOrNull()
+        t != null && t > 0.0
+    }
 }
+
+internal fun formatDurationSeconds(seconds: Double): String {
+    if (seconds < 60.0) {
+        return if (seconds % 1.0 == 0.0) "${seconds.toInt()}s" else "${seconds}s"
+    }
+    val totalWholeSeconds = seconds.toInt()
+    val mins = totalWholeSeconds / 60
+    val secs = totalWholeSeconds - mins * 60
+    val secsStr = if (secs < 10) "0$secs" else secs.toString()
+    return "$mins:$secsStr"
+}
+
+internal fun formatMeters(meters: Int): String =
+    if (meters >= 1000) {
+        val km = meters / 1000.0
+        val s = if (km % 1.0 == 0.0) km.toInt().toString() else km.toString()
+        "$s km"
+    } else {
+        "$meters m"
+    }

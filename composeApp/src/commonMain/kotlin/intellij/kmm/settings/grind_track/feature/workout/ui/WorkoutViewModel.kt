@@ -6,6 +6,7 @@ import intellij.kmm.settings.grind_track.core.data.RoutineExerciseWithExercise
 import intellij.kmm.settings.grind_track.core.data.RoutineRepository
 import intellij.kmm.settings.grind_track.core.data.WorkoutRepository
 import intellij.kmm.settings.grind_track.core.notifications.RestTimerAlarm
+import intellij.kmm.settings.grind_track.core.database.entity.ExerciseType
 import intellij.kmm.settings.grind_track.core.database.entity.Routine
 import intellij.kmm.settings.grind_track.core.database.entity.Side
 import intellij.kmm.settings.grind_track.core.database.entity.WorkoutSession
@@ -29,8 +30,10 @@ sealed interface Phase {
     data class Resting(
         val totalSeconds: Int,
         val remainingSeconds: Int,
-        val weightDraft: String,
-        val repsDraft: String,
+        val weightDraft: String = "",
+        val repsDraft: String = "",
+        val distanceDraft: String = "",
+        val durationDraft: String = "",
         val isLogged: Boolean = false,
         val side: Side? = null,
         val isInterSideRest: Boolean = false,
@@ -83,6 +86,13 @@ private data class Position(val exerciseIndex: Int, val setIndex: Int, val sideI
     }
 }
 
+private data class LastEntry(
+    val weight: Double = 0.0,
+    val reps: Int = 0,
+    val distance: Int = 0,
+    val duration: Double = 0.0,
+)
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class WorkoutViewModel(
     private val workoutRepository: WorkoutRepository,
@@ -93,8 +103,8 @@ class WorkoutViewModel(
     private val position = MutableStateFlow(Position.START)
     private val phase = MutableStateFlow<Phase>(Phase.Working)
 
-    /** Last submitted weight/reps per `(routineExerciseId, side?)`, used to prefill the rest form. */
-    private val lastSubmitted = mutableMapOf<Pair<Long, Side?>, Pair<Double, Int>>()
+    /** Last submitted measurements per `(routineExerciseId, side?)`, used to prefill the rest form. */
+    private val lastSubmitted = mutableMapOf<Pair<Long, Side?>, LastEntry>()
 
     private var timerJob: Job? = null
 
@@ -156,18 +166,37 @@ class WorkoutViewModel(
             exercise.effectiveRestSeconds
         }
         val side: Side? = current.currentSide
-        val (weightPrefill, repsPrefill) = lastSubmitted[exercise.routineExercise.id to side]
-            ?: (0.0 to (exercise.routineExercise.targetReps ?: 0))
+        val last = lastSubmitted[exercise.routineExercise.id to side] ?: LastEntry()
         val weightDraft = when {
-            weightPrefill > 0.0 -> formatWeight(weightPrefill)
+            exercise.exercise.type != ExerciseType.STRENGTH -> ""
+            last.weight > 0.0 -> formatWeight(last.weight)
             exercise.exercise.bodyWeight -> "0"
+            else -> ""
+        }
+        val targetReps = exercise.routineExercise.targetReps ?: 0
+        val repsDraft = when {
+            exercise.exercise.type != ExerciseType.STRENGTH -> ""
+            last.reps > 0 -> last.reps.toString()
+            targetReps > 0 -> targetReps.toString()
+            else -> ""
+        }
+        val distanceDraft = when {
+            exercise.exercise.type != ExerciseType.DISTANCE -> ""
+            last.distance > 0 -> last.distance.toString()
+            else -> ""
+        }
+        val durationDraft = when {
+            exercise.exercise.type != ExerciseType.TIME -> ""
+            last.duration > 0.0 -> formatDoubleStripped(last.duration)
             else -> ""
         }
         phase.value = Phase.Resting(
             totalSeconds = totalSeconds,
             remainingSeconds = totalSeconds,
             weightDraft = weightDraft,
-            repsDraft = if (repsPrefill > 0) repsPrefill.toString() else "",
+            repsDraft = repsDraft,
+            distanceDraft = distanceDraft,
+            durationDraft = durationDraft,
             side = side,
             isInterSideRest = isFirstSide,
         )
@@ -180,9 +209,19 @@ class WorkoutViewModel(
         startTimer(totalSeconds)
     }
 
-    fun updateRestForm(weight: String, reps: String) {
+    fun updateRestForm(
+        weight: String,
+        reps: String,
+        distance: String,
+        duration: String,
+    ) {
         val resting = phase.value as? Phase.Resting ?: return
-        phase.value = resting.copy(weightDraft = weight, repsDraft = reps)
+        phase.value = resting.copy(
+            weightDraft = weight,
+            repsDraft = reps,
+            distanceDraft = distance,
+            durationDraft = duration,
+        )
     }
 
     /**
@@ -194,9 +233,23 @@ class WorkoutViewModel(
         val resting = current.phase as? Phase.Resting ?: return
         if (resting.isLogged) return
         val exercise = current.currentExercise ?: return
-        val weight = resting.weightDraft.toDoubleOrNull() ?: return
-        val reps = resting.repsDraft.toIntOrNull()?.takeIf { it > 0 } ?: return
-        if (weight < 0.0) return
+
+        val (weight, reps, distance, duration) = when (exercise.exercise.type) {
+            ExerciseType.STRENGTH -> {
+                val w = resting.weightDraft.toDoubleOrNull() ?: return
+                val r = resting.repsDraft.toIntOrNull()?.takeIf { it > 0 } ?: return
+                if (w < 0.0) return
+                LastEntry(weight = w, reps = r)
+            }
+            ExerciseType.DISTANCE -> {
+                val d = resting.distanceDraft.toIntOrNull()?.takeIf { it > 0 } ?: return
+                LastEntry(distance = d)
+            }
+            ExerciseType.TIME -> {
+                val t = resting.durationDraft.toDoubleOrNull()?.takeIf { it > 0.0 } ?: return
+                LastEntry(duration = t)
+            }
+        }
 
         viewModelScope.launch {
             workoutRepository.recordSet(
@@ -206,8 +259,11 @@ class WorkoutViewModel(
                 weight = weight,
                 reps = reps,
                 side = resting.side,
+                distanceMeters = if (exercise.exercise.type == ExerciseType.DISTANCE) distance else null,
+                durationSeconds = if (exercise.exercise.type == ExerciseType.TIME) duration else null,
             )
-            lastSubmitted[exercise.routineExercise.id to resting.side] = weight to reps
+            lastSubmitted[exercise.routineExercise.id to resting.side] =
+                LastEntry(weight = weight, reps = reps, distance = distance, duration = duration)
             val stillResting = phase.value as? Phase.Resting ?: return@launch
             phase.value = stillResting.copy(isLogged = true)
         }
@@ -318,6 +374,9 @@ class WorkoutViewModel(
 
 private fun formatWeight(weight: Double): String =
     if (weight % 1.0 == 0.0) weight.toLong().toString() else weight.toString()
+
+private fun formatDoubleStripped(value: Double): String =
+    if (value % 1.0 == 0.0) value.toLong().toString() else value.toString()
 
 internal fun sideLabel(side: Side): String = when (side) {
     Side.LEFT -> "Left"

@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import intellij.kmm.settings.grind_track.core.data.RoutineExerciseWithExercise
 import intellij.kmm.settings.grind_track.core.database.entity.Exercise
+import intellij.kmm.settings.grind_track.core.database.entity.ExerciseType
 import intellij.kmm.settings.grind_track.core.database.entity.Side
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -135,7 +136,7 @@ fun RoutineEditorScreen(
         AddExerciseDialog(
             catalogue = state.catalogue,
             onDismiss = { showPicker = false },
-            onCreateExercise = { name, rest, restBetween, unilateral, restAfterFirstSide, bodyWeight, then ->
+            onCreateExercise = { name, rest, restBetween, unilateral, restAfterFirstSide, bodyWeight, type, then ->
                 viewModel.createExercise(
                     name = name,
                     defaultRestSeconds = rest,
@@ -143,16 +144,19 @@ fun RoutineEditorScreen(
                     unilateral = unilateral,
                     defaultRestAfterFirstSideSeconds = restAfterFirstSide,
                     bodyWeight = bodyWeight,
+                    type = type,
                     onCreated = then,
                 )
             },
-            onAdd = { exerciseId, sets, reps, restOverride, restBetweenOverride ->
+            onAdd = { exerciseId, sets, reps, restOverride, restBetweenOverride, distance, duration ->
                 viewModel.addExercise(
                     exerciseId = exerciseId,
                     targetSets = sets,
                     targetReps = reps,
                     restSecondsOverride = restOverride,
                     restBetweenExercisesOverride = restBetweenOverride,
+                    targetDistanceMeters = distance,
+                    targetDurationSeconds = duration,
                 )
                 showPicker = false
             },
@@ -293,7 +297,9 @@ private fun RoutineExerciseRow(
     onMoveDown: () -> Unit,
 ) {
     val re = item.routineExercise
-    val unilateral = item.exercise.unilateral
+    val type = item.exercise.type
+    val isStrength = type == ExerciseType.STRENGTH
+    val unilateral = isStrength && item.exercise.unilateral
     var setsDraft by remember(re.id) { mutableStateOf(re.targetSets.toString()) }
     var repsDraft by remember(re.id) { mutableStateOf(re.targetReps?.toString() ?: "") }
     var restDraft by remember(re.id) {
@@ -305,7 +311,13 @@ private fun RoutineExerciseRow(
     var restAfterFirstSideDraft by remember(re.id) {
         mutableStateOf(item.effectiveRestAfterFirstSideSeconds.toString())
     }
-    val toFailure = re.targetReps == null
+    var targetDistanceDraft by remember(re.id) {
+        mutableStateOf(re.targetDistanceMeters?.toString() ?: "")
+    }
+    var targetDurationDraft by remember(re.id) {
+        mutableStateOf(re.targetDurationSeconds?.let { formatDoubleStripped(it) } ?: "")
+    }
+    val toFailure = isStrength && re.targetReps == null
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -316,8 +328,13 @@ private fun RoutineExerciseRow(
                         style = MaterialTheme.typography.titleMedium,
                     )
                     val badges = buildList {
+                        when (type) {
+                            ExerciseType.STRENGTH -> {}
+                            ExerciseType.DISTANCE -> add("Distance")
+                            ExerciseType.TIME -> add("Time")
+                        }
                         if (unilateral) add("Unilateral")
-                        if (item.exercise.bodyWeight) add("Body weight")
+                        if (isStrength && item.exercise.bodyWeight) add("Body weight")
                     }
                     if (badges.isNotEmpty()) {
                         Text(
@@ -349,19 +366,54 @@ private fun RoutineExerciseRow(
                     },
                     modifier = Modifier.weight(1f),
                 )
-                NumberField(
-                    label = "Reps",
-                    value = if (toFailure) "" else repsDraft,
-                    onValueChange = { newValue ->
-                        repsDraft = newValue
-                        newValue.toIntOrNull()?.takeIf { it > 0 }?.let { reps ->
-                            if (reps != re.targetReps) onChange(re.copy(targetReps = reps))
-                        }
-                    },
-                    enabled = !toFailure,
-                    placeholder = if (toFailure) "Failure" else null,
-                    modifier = Modifier.weight(1f),
-                )
+                when (type) {
+                    ExerciseType.STRENGTH -> NumberField(
+                        label = "Reps",
+                        value = if (toFailure) "" else repsDraft,
+                        onValueChange = { newValue ->
+                            repsDraft = newValue
+                            newValue.toIntOrNull()?.takeIf { it > 0 }?.let { reps ->
+                                if (reps != re.targetReps) onChange(re.copy(targetReps = reps))
+                            }
+                        },
+                        enabled = !toFailure,
+                        placeholder = if (toFailure) "Failure" else null,
+                        modifier = Modifier.weight(1f),
+                    )
+                    ExerciseType.DISTANCE -> NumberField(
+                        label = "Target time (s)",
+                        value = targetDurationDraft,
+                        onValueChange = { newValue ->
+                            targetDurationDraft = newValue
+                            val parsed = newValue.toDoubleOrNull()
+                            if (newValue.isBlank()) {
+                                if (re.targetDurationSeconds != null) {
+                                    onChange(re.copy(targetDurationSeconds = null))
+                                }
+                            } else if (parsed != null && parsed > 0.0 && parsed != re.targetDurationSeconds) {
+                                onChange(re.copy(targetDurationSeconds = parsed))
+                            }
+                        },
+                        decimal = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    ExerciseType.TIME -> NumberField(
+                        label = "Target distance (m)",
+                        value = targetDistanceDraft,
+                        onValueChange = { newValue ->
+                            targetDistanceDraft = newValue
+                            val parsed = newValue.toIntOrNull()
+                            if (newValue.isBlank()) {
+                                if (re.targetDistanceMeters != null) {
+                                    onChange(re.copy(targetDistanceMeters = null))
+                                }
+                            } else if (parsed != null && parsed > 0 && parsed != re.targetDistanceMeters) {
+                                onChange(re.copy(targetDistanceMeters = parsed))
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 NumberField(
                     label = "Rest (s)",
                     value = restDraft,
@@ -442,27 +494,32 @@ private fun RoutineExerciseRow(
                     }
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(
-                    checked = toFailure,
-                    onCheckedChange = { checked ->
-                        if (checked) {
-                            onChange(re.copy(targetReps = null))
-                        } else {
-                            val resolved = repsDraft.toIntOrNull()?.takeIf { it > 0 } ?: 8
-                            repsDraft = resolved.toString()
-                            onChange(re.copy(targetReps = resolved))
-                        }
-                    },
-                )
-                Text(
-                    text = "To failure (max reps)",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+            if (isStrength) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = toFailure,
+                        onCheckedChange = { checked ->
+                            if (checked) {
+                                onChange(re.copy(targetReps = null))
+                            } else {
+                                val resolved = repsDraft.toIntOrNull()?.takeIf { it > 0 } ?: 8
+                                repsDraft = resolved.toString()
+                                onChange(re.copy(targetReps = resolved))
+                            }
+                        },
+                    )
+                    Text(
+                        text = "To failure (max reps)",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
         }
     }
 }
+
+private fun formatDoubleStripped(value: Double): String =
+    if (value % 1.0 == 0.0) value.toLong().toString() else value.toString()
 
 @Composable
 private fun NumberField(
@@ -472,6 +529,7 @@ private fun NumberField(
     modifier: Modifier = Modifier,
     placeholder: String? = null,
     enabled: Boolean = true,
+    decimal: Boolean = false,
 ) {
     OutlinedTextField(
         value = value,
@@ -479,7 +537,7 @@ private fun NumberField(
         label = { Text(label) },
         placeholder = placeholder?.let { { Text(it) } },
         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-            keyboardType = KeyboardType.Number,
+            keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number,
         ),
         singleLine = true,
         enabled = enabled,
@@ -498,9 +556,18 @@ private fun AddExerciseDialog(
         unilateral: Boolean,
         defaultRestAfterFirstSide: Int,
         bodyWeight: Boolean,
+        type: ExerciseType,
         onCreated: (Long) -> Unit,
     ) -> Unit,
-    onAdd: (exerciseId: Long, sets: Int, reps: Int?, restOverride: Int?, restBetweenOverride: Int?) -> Unit,
+    onAdd: (
+        exerciseId: Long,
+        sets: Int,
+        reps: Int?,
+        restOverride: Int?,
+        restBetweenOverride: Int?,
+        targetDistanceMeters: Int?,
+        targetDurationSeconds: Double?,
+    ) -> Unit,
 ) {
     var step by remember { mutableStateOf<PickerStep>(PickerStep.List) }
 
@@ -551,15 +618,15 @@ private fun AddExerciseDialog(
                 is PickerStep.Configure -> ConfigureExerciseForm(
                     exercise = current.exercise,
                     onCancel = { step = PickerStep.List },
-                    onAdd = { sets, reps, restOverride, restBetweenOverride ->
-                        onAdd(current.exercise.id, sets, reps, restOverride, restBetweenOverride)
+                    onAdd = { sets, reps, restOverride, restBetweenOverride, distance, duration ->
+                        onAdd(current.exercise.id, sets, reps, restOverride, restBetweenOverride, distance, duration)
                     },
                 )
                 PickerStep.Create -> CreateExerciseForm(
                     onCancel = { step = PickerStep.List },
-                    onCreateAndAdd = { name, rest, restBetween, unilateral, restAfterFirstSide, bodyWeight, sets, reps ->
-                        onCreateExercise(name, rest, restBetween, unilateral, restAfterFirstSide, bodyWeight) { newId ->
-                            onAdd(newId, sets, reps, null, null)
+                    onCreateAndAdd = { name, rest, restBetween, unilateral, restAfterFirstSide, bodyWeight, type, sets, reps, distance, duration ->
+                        onCreateExercise(name, rest, restBetween, unilateral, restAfterFirstSide, bodyWeight, type) { newId ->
+                            onAdd(newId, sets, reps, null, null, distance, duration)
                         }
                     },
                 )
@@ -578,28 +645,55 @@ private sealed class PickerStep {
 private fun ConfigureExerciseForm(
     exercise: Exercise,
     onCancel: () -> Unit,
-    onAdd: (sets: Int, reps: Int?, restOverride: Int?, restBetweenOverride: Int?) -> Unit,
+    onAdd: (
+        sets: Int,
+        reps: Int?,
+        restOverride: Int?,
+        restBetweenOverride: Int?,
+        targetDistanceMeters: Int?,
+        targetDurationSeconds: Double?,
+    ) -> Unit,
 ) {
+    val isStrength = exercise.type == ExerciseType.STRENGTH
     var sets by remember { mutableStateOf("3") }
     var reps by remember { mutableStateOf("8") }
     var toFailure by remember { mutableStateOf(false) }
     var rest by remember { mutableStateOf("") }
     var restBetween by remember { mutableStateOf("") }
+    var targetDistance by remember { mutableStateOf(if (exercise.type == ExerciseType.TIME) "100" else "") }
+    var targetDuration by remember { mutableStateOf(if (exercise.type == ExerciseType.DISTANCE) "300" else "") }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             NumberField("Sets", sets, { sets = it }, modifier = Modifier.weight(1f))
-            NumberField(
-                label = "Reps",
-                value = if (toFailure) "" else reps,
-                onValueChange = { reps = it },
-                enabled = !toFailure,
-                placeholder = if (toFailure) "Failure" else null,
-                modifier = Modifier.weight(1f),
-            )
+            when (exercise.type) {
+                ExerciseType.STRENGTH -> NumberField(
+                    label = "Reps",
+                    value = if (toFailure) "" else reps,
+                    onValueChange = { reps = it },
+                    enabled = !toFailure,
+                    placeholder = if (toFailure) "Failure" else null,
+                    modifier = Modifier.weight(1f),
+                )
+                ExerciseType.DISTANCE -> NumberField(
+                    label = "Target time (s)",
+                    value = targetDuration,
+                    onValueChange = { targetDuration = it },
+                    decimal = true,
+                    modifier = Modifier.weight(1f),
+                )
+                ExerciseType.TIME -> NumberField(
+                    label = "Target distance (m)",
+                    value = targetDistance,
+                    onValueChange = { targetDistance = it },
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = toFailure, onCheckedChange = { toFailure = it })
-            Text("To failure (max reps)", style = MaterialTheme.typography.bodyMedium)
+        if (isStrength) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = toFailure, onCheckedChange = { toFailure = it })
+                Text("To failure (max reps)", style = MaterialTheme.typography.bodyMedium)
+            }
         }
         NumberField(
             label = "Rest (s)",
@@ -619,13 +713,19 @@ private fun ConfigureExerciseForm(
             TextButton(onClick = onCancel) { Text("Back") }
             Button(
                 enabled = sets.toIntOrNull()?.let { it > 0 } == true &&
-                    (toFailure || reps.toIntOrNull()?.let { it > 0 } == true),
+                    when (exercise.type) {
+                        ExerciseType.STRENGTH -> toFailure || reps.toIntOrNull()?.let { it > 0 } == true
+                        ExerciseType.DISTANCE -> targetDuration.toDoubleOrNull()?.let { it > 0.0 } == true
+                        ExerciseType.TIME -> targetDistance.toIntOrNull()?.let { it > 0 } == true
+                    },
                 onClick = {
                     val s = sets.toInt()
-                    val r = if (toFailure) null else reps.toInt()
+                    val r = if (isStrength && !toFailure) reps.toInt() else if (isStrength) null else null
                     val ro = rest.toIntOrNull()?.takeIf { it > 0 }
                     val rbo = restBetween.toIntOrNull()?.takeIf { it >= 0 }
-                    onAdd(s, r, ro, rbo)
+                    val td = if (exercise.type == ExerciseType.TIME) targetDistance.toIntOrNull()?.takeIf { it > 0 } else null
+                    val tdur = if (exercise.type == ExerciseType.DISTANCE) targetDuration.toDoubleOrNull()?.takeIf { it > 0.0 } else null
+                    onAdd(s, r, ro, rbo, td, tdur)
                 },
             ) { Text("Add") }
         }
@@ -642,11 +742,15 @@ private fun CreateExerciseForm(
         unilateral: Boolean,
         defaultRestAfterFirstSide: Int,
         bodyWeight: Boolean,
+        type: ExerciseType,
         sets: Int,
         reps: Int?,
+        targetDistanceMeters: Int?,
+        targetDurationSeconds: Double?,
     ) -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
+    var type by remember { mutableStateOf(ExerciseType.STRENGTH) }
     var rest by remember { mutableStateOf("90") }
     var restBetween by remember { mutableStateOf("180") }
     var unilateral by remember { mutableStateOf(false) }
@@ -655,6 +759,9 @@ private fun CreateExerciseForm(
     var sets by remember { mutableStateOf("3") }
     var reps by remember { mutableStateOf("8") }
     var toFailure by remember { mutableStateOf(false) }
+    var targetDistance by remember { mutableStateOf("100") }
+    var targetDuration by remember { mutableStateOf("300") }
+    val isStrength = type == ExerciseType.STRENGTH
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(
             value = name,
@@ -663,6 +770,30 @@ private fun CreateExerciseForm(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "Type",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ExerciseType.entries.forEach { t ->
+                    FilterChip(
+                        selected = type == t,
+                        onClick = { type = t },
+                        label = {
+                            Text(
+                                text = when (t) {
+                                    ExerciseType.STRENGTH -> "Strength"
+                                    ExerciseType.DISTANCE -> "Distance"
+                                    ExerciseType.TIME -> "Time"
+                                }
+                            )
+                        },
+                    )
+                }
+            }
+        }
         NumberField(
             label = "Default rest (s)",
             value = rest,
@@ -675,50 +806,69 @@ private fun CreateExerciseForm(
             onValueChange = { restBetween = it },
             modifier = Modifier.fillMaxWidth(),
         )
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = unilateral, onCheckedChange = { unilateral = it })
-            Column {
-                Text("Unilateral (left/right)", style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    "Each set is performed on each side separately.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        if (isStrength) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = unilateral, onCheckedChange = { unilateral = it })
+                Column {
+                    Text("Unilateral (left/right)", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "Each set is performed on each side separately.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            if (unilateral) {
+                NumberField(
+                    label = "Default rest between sides (s)",
+                    value = restAfterFirstSide,
+                    onValueChange = { restAfterFirstSide = it },
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
-        }
-        if (unilateral) {
-            NumberField(
-                label = "Default rest between sides (s)",
-                value = restAfterFirstSide,
-                onValueChange = { restAfterFirstSide = it },
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = bodyWeight, onCheckedChange = { bodyWeight = it })
-            Column {
-                Text("Body weight", style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    "Tracks added weight on top of bodyweight (defaults to 0).",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = bodyWeight, onCheckedChange = { bodyWeight = it })
+                Column {
+                    Text("Body weight", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "Tracks added weight on top of bodyweight (defaults to 0).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             NumberField("Sets", sets, { sets = it }, modifier = Modifier.weight(1f))
-            NumberField(
-                label = "Reps",
-                value = if (toFailure) "" else reps,
-                onValueChange = { reps = it },
-                enabled = !toFailure,
-                placeholder = if (toFailure) "Failure" else null,
-                modifier = Modifier.weight(1f),
-            )
+            when (type) {
+                ExerciseType.STRENGTH -> NumberField(
+                    label = "Reps",
+                    value = if (toFailure) "" else reps,
+                    onValueChange = { reps = it },
+                    enabled = !toFailure,
+                    placeholder = if (toFailure) "Failure" else null,
+                    modifier = Modifier.weight(1f),
+                )
+                ExerciseType.DISTANCE -> NumberField(
+                    label = "Target time (s)",
+                    value = targetDuration,
+                    onValueChange = { targetDuration = it },
+                    decimal = true,
+                    modifier = Modifier.weight(1f),
+                )
+                ExerciseType.TIME -> NumberField(
+                    label = "Target distance (m)",
+                    value = targetDistance,
+                    onValueChange = { targetDistance = it },
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = toFailure, onCheckedChange = { toFailure = it })
-            Text("To failure (max reps)", style = MaterialTheme.typography.bodyMedium)
+        if (isStrength) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = toFailure, onCheckedChange = { toFailure = it })
+                Text("To failure (max reps)", style = MaterialTheme.typography.bodyMedium)
+            }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(onClick = onCancel) { Text("Back") }
@@ -726,21 +876,30 @@ private fun CreateExerciseForm(
                 enabled = name.isNotBlank() &&
                     rest.toIntOrNull()?.let { it > 0 } == true &&
                     restBetween.toIntOrNull()?.let { it >= 0 } == true &&
-                    (!unilateral || restAfterFirstSide.toIntOrNull()?.let { it >= 0 } == true) &&
+                    (!isStrength || !unilateral || restAfterFirstSide.toIntOrNull()?.let { it >= 0 } == true) &&
                     sets.toIntOrNull()?.let { it > 0 } == true &&
-                    (toFailure || reps.toIntOrNull()?.let { it > 0 } == true),
+                    when (type) {
+                        ExerciseType.STRENGTH -> toFailure || reps.toIntOrNull()?.let { it > 0 } == true
+                        ExerciseType.DISTANCE -> targetDuration.toDoubleOrNull()?.let { it > 0.0 } == true
+                        ExerciseType.TIME -> targetDistance.toIntOrNull()?.let { it > 0 } == true
+                    },
                 onClick = {
-                    val resolvedReps = if (toFailure) null else reps.toInt()
+                    val resolvedReps = if (isStrength && !toFailure) reps.toInt() else null
                     val rafs = restAfterFirstSide.toIntOrNull()?.takeIf { it >= 0 } ?: 60
+                    val td = if (type == ExerciseType.TIME) targetDistance.toIntOrNull()?.takeIf { it > 0 } else null
+                    val tdur = if (type == ExerciseType.DISTANCE) targetDuration.toDoubleOrNull()?.takeIf { it > 0.0 } else null
                     onCreateAndAdd(
                         name.trim(),
                         rest.toInt(),
                         restBetween.toInt(),
-                        unilateral,
+                        isStrength && unilateral,
                         rafs,
-                        bodyWeight,
+                        isStrength && bodyWeight,
+                        type,
                         sets.toInt(),
                         resolvedReps,
+                        td,
+                        tdur,
                     )
                 },
             ) { Text("Create & add") }
