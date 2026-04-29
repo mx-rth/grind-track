@@ -1,7 +1,9 @@
 package intellij.kmm.settings.grind_track.feature.settings.ui
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -12,18 +14,22 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import intellij.kmm.settings.grind_track.app.ThemeState
 import intellij.kmm.settings.grind_track.core.notifications.CustomSound
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -34,6 +40,8 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val themeOverride by ThemeState.isDark.collectAsStateWithLifecycle()
+    val isDarkMode = themeOverride ?: isSystemInDarkTheme()
     val pickNotificationSound =
         rememberSoundFilePicker(onPicked = viewModel::installNotificationSound)
     val pickAlarmSound = rememberSoundFilePicker(onPicked = viewModel::installAlarmSound)
@@ -58,6 +66,8 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
+            DarkModeSection(isDark = isDarkMode, onToggle = ThemeState::set)
+            HorizontalDivider()
             SoundSection(
                 sectionTitle = "Notification sound",
                 description = "Plays when the rest timer ends.",
@@ -83,6 +93,25 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+@Composable
+private fun DarkModeSection(isDark: Boolean, onToggle: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text("Dark mode", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = if (isDark) "Dark theme active" else "Light theme active",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = isDark, onCheckedChange = onToggle)
     }
 }
 
