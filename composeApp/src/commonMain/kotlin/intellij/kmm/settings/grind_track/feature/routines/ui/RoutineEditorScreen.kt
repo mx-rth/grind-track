@@ -1,7 +1,6 @@
 package intellij.kmm.settings.grind_track.feature.routines.ui
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -72,60 +71,61 @@ fun RoutineEditorScreen(
             )
         },
     ) { padding ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             val routine = state.routine
             if (routine != null) {
-                var nameDraft by remember(routine.id, routine.name) { mutableStateOf(routine.name) }
-                OutlinedTextField(
-                    value = nameDraft,
-                    onValueChange = {
-                        nameDraft = it
-                        viewModel.renameRoutine(it)
-                    },
-                    label = { Text("Routine name") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                ScheduleDayPicker(
-                    selected = routine.scheduledDays,
-                    onToggle = viewModel::toggleScheduledDay,
-                )
-                NotificationToggleRow(
-                    enabled = routine.notificationEnabled,
-                    minuteOfDay = routine.notificationMinuteOfDay,
-                    hasScheduledDays = routine.scheduledDays.isNotEmpty(),
-                    onToggleEnabled = viewModel::setNotificationEnabled,
-                    onPickTime = viewModel::setNotificationTime,
-                )
-            }
-
-            Box(modifier = Modifier.weight(1f)) {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(state.exercises, key = { it.routineExercise.id }) { item ->
-                        RoutineExerciseRow(
-                            item = item,
-                            onChange = viewModel::updateRoutineExercise,
-                            onRemove = { viewModel.removeRoutineExercise(item.routineExercise.id) },
-                            onMoveUp = { viewModel.moveUp(item.routineExercise.id) },
-                            onMoveDown = { viewModel.moveDown(item.routineExercise.id) },
-                        )
-                    }
+                item(key = "name") {
+                    var nameDraft by remember(routine.id, routine.name) { mutableStateOf(routine.name) }
+                    OutlinedTextField(
+                        value = nameDraft,
+                        onValueChange = {
+                            nameDraft = it
+                            viewModel.renameRoutine(it)
+                        },
+                        label = { Text("Routine name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                item(key = "schedule") {
+                    ScheduleDayPicker(
+                        selected = routine.scheduledDays,
+                        onToggle = viewModel::toggleScheduledDay,
+                    )
+                }
+                item(key = "notifications") {
+                    NotificationToggleRow(
+                        enabled = routine.notificationEnabled,
+                        minuteOfDay = routine.notificationMinuteOfDay,
+                        hasScheduledDays = routine.scheduledDays.isNotEmpty(),
+                        onToggleEnabled = viewModel::setNotificationEnabled,
+                        onPickTime = viewModel::setNotificationTime,
+                    )
                 }
             }
 
-            Button(
-                onClick = { showPicker = true },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = null)
-                Text("  Add exercise")
+            items(state.exercises, key = { it.routineExercise.id }) { item ->
+                RoutineExerciseRow(
+                    item = item,
+                    onChange = viewModel::updateRoutineExercise,
+                    onRemove = { viewModel.removeRoutineExercise(item.routineExercise.id) },
+                    onMoveUp = { viewModel.moveUp(item.routineExercise.id) },
+                    onMoveDown = { viewModel.moveDown(item.routineExercise.id) },
+                )
+            }
+
+            item(key = "add-exercise") {
+                Button(
+                    onClick = { showPicker = true },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null)
+                    Text("  Add exercise")
+                }
             }
         }
     }
@@ -281,10 +281,10 @@ private fun RoutineExerciseRow(
     var setsDraft by remember(re.id) { mutableStateOf(re.targetSets.toString()) }
     var repsDraft by remember(re.id) { mutableStateOf(re.targetReps?.toString() ?: "") }
     var restDraft by remember(re.id) {
-        mutableStateOf(re.restSecondsOverride?.toString() ?: "")
+        mutableStateOf(item.effectiveRestSeconds.toString())
     }
     var restBetweenDraft by remember(re.id) {
-        mutableStateOf(re.restBetweenExercisesOverride?.toString() ?: "")
+        mutableStateOf(item.effectiveRestBetweenExercisesSeconds.toString())
     }
     val toFailure = re.targetReps == null
 
@@ -339,11 +339,13 @@ private fun RoutineExerciseRow(
                         val parsed = newValue.toIntOrNull()
                         if (newValue.isBlank()) {
                             if (re.restSecondsOverride != null) onChange(re.copy(restSecondsOverride = null))
-                        } else if (parsed != null && parsed > 0 && parsed != re.restSecondsOverride) {
-                            onChange(re.copy(restSecondsOverride = parsed))
+                        } else if (parsed != null && parsed > 0) {
+                            val override = parsed.takeIf { it != item.exercise.defaultRestSeconds }
+                            if (override != re.restSecondsOverride) {
+                                onChange(re.copy(restSecondsOverride = override))
+                            }
                         }
                     },
-                    placeholder = "${item.exercise.defaultRestSeconds}",
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -357,11 +359,13 @@ private fun RoutineExerciseRow(
                         if (re.restBetweenExercisesOverride != null) {
                             onChange(re.copy(restBetweenExercisesOverride = null))
                         }
-                    } else if (parsed != null && parsed >= 0 && parsed != re.restBetweenExercisesOverride) {
-                        onChange(re.copy(restBetweenExercisesOverride = parsed))
+                    } else if (parsed != null && parsed >= 0) {
+                        val override = parsed.takeIf { it != item.exercise.defaultRestBetweenExercisesSeconds }
+                        if (override != re.restBetweenExercisesOverride) {
+                            onChange(re.copy(restBetweenExercisesOverride = override))
+                        }
                     }
                 },
-                placeholder = "${item.exercise.defaultRestBetweenExercisesSeconds}",
                 modifier = Modifier.fillMaxWidth(),
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
