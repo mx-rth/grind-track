@@ -1,11 +1,14 @@
 package intellij.kmm.settings.grind_track.feature.progress.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -13,7 +16,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
@@ -21,6 +30,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -43,12 +53,18 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import grind_track.composeapp.generated.resources.Res
+import grind_track.composeapp.generated.resources.achievement_30day_streak
+import grind_track.composeapp.generated.resources.achievement_7day_streak
+import grind_track.composeapp.generated.resources.achievement_consistency
+import grind_track.composeapp.generated.resources.achievement_milestone
+import grind_track.composeapp.generated.resources.achievement_speed
+import grind_track.composeapp.generated.resources.achievement_strength
 import grind_track.composeapp.generated.resources.ic_flame
-import org.jetbrains.compose.resources.painterResource
 import intellij.kmm.settings.grind_track.core.database.entity.Exercise
 import intellij.kmm.settings.grind_track.core.database.entity.ExerciseType
 import intellij.kmm.settings.grind_track.core.database.entity.SetEntry
@@ -58,7 +74,61 @@ import kotlin.math.roundToInt
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import org.jetbrains.compose.resources.DrawableResource
+import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.viewmodel.koinViewModel
+
+private data class Achievement(
+    val id: String,
+    val name: String,
+    val howToObtain: String,
+    val isObtained: Boolean = false,
+    val obtainedDate: String? = null,
+    val imageRes: DrawableResource,
+)
+
+private val allAchievements = listOf(
+    Achievement(
+        id = "7day_streak",
+        name = "Boot Sequence",
+        howToObtain = "Reach a 7-day streak by completing 7 consecutive planned workouts.",
+        isObtained = true,
+        obtainedDate = "April 14, 2026",
+        imageRes = Res.drawable.achievement_7day_streak,
+    ),
+    Achievement(
+        id = "30day_streak",
+        name = "Cyberpsycho",
+        howToObtain = "Reach a 30-day streak by completing 30 consecutive planned workouts.",
+        imageRes = Res.drawable.achievement_30day_streak,
+    ),
+    Achievement(
+        id = "strength",
+        name = "Overclocked",
+        howToObtain = "Increase your max weight on any exercise by 20% compared to your first logged session.",
+        imageRes = Res.drawable.achievement_strength,
+    ),
+    Achievement(
+        id = "consistency",
+        name = "Peaked",
+        howToObtain = "Decrease your max weight on any exercise by 20% compared to your last logged session.",
+        isObtained = true,
+        obtainedDate = "April 22, 2026",
+        imageRes = Res.drawable.achievement_consistency,
+    ),
+    Achievement(
+        id = "speed",
+        name = "David Martinez",
+        howToObtain = "Complete a time-based workout 20% faster for the same logged distance.",
+        imageRes = Res.drawable.achievement_speed,
+    ),
+    Achievement(
+        id = "milestone",
+        name = "Extra Mile",
+        howToObtain = "Complete a 20% longer distance than your last logged workout.",
+        imageRes = Res.drawable.achievement_milestone,
+    ),
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,12 +136,34 @@ fun ProgressScreen(
     viewModel: ProgressViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var showAchievements by remember { mutableStateOf(false) }
+    var selectedAchievement by remember { mutableStateOf<Achievement?>(null) }
+
+    if (showAchievements) {
+        AchievementsDialog(
+            achievements = allAchievements,
+            onDismiss = { showAchievements = false },
+            onSelectAchievement = { selectedAchievement = it },
+        )
+    }
+    selectedAchievement?.let { achievement ->
+        AchievementDetailDialog(
+            achievement = achievement,
+            onDismiss = { selectedAchievement = null },
+        )
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Progress") },
                 actions = {
+                    IconButton(onClick = { showAchievements = true }) {
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            contentDescription = "Achievements",
+                        )
+                    }
                     if (!state.isLoading) {
                         Row(
                             modifier = Modifier.padding(end = 16.dp),
@@ -107,6 +199,132 @@ fun ProgressScreen(
             }
         }
     }
+}
+
+@Composable
+private fun AchievementsDialog(
+    achievements: List<Achievement>,
+    onDismiss: () -> Unit,
+    onSelectAchievement: (Achievement) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        },
+        title = { Text("Achievements") },
+        text = {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(achievements, key = { it.id }) { achievement ->
+                    AchievementGridItem(
+                        achievement = achievement,
+                        onClick = { onSelectAchievement(achievement) },
+                    )
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun AchievementGridItem(
+    achievement: Achievement,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        androidx.compose.foundation.Image(
+            painter = painterResource(achievement.imageRes),
+            contentDescription = achievement.name,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f),
+            alpha = if (achievement.isObtained) 1f else 0.5f,
+        )
+        Text(
+            text = achievement.name,
+            style = MaterialTheme.typography.labelSmall,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun AchievementDetailDialog(
+    achievement: Achievement,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        },
+        title = { Text(achievement.name) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                androidx.compose.foundation.Image(
+                    painter = painterResource(achievement.imageRes),
+                    contentDescription = achievement.name,
+                    modifier = Modifier
+                        .size(100.dp)
+                        .align(Alignment.CenterHorizontally),
+                    alpha = if (achievement.isObtained) 1f else 0.5f,
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "How to obtain",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = achievement.howToObtain,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                Spacer(modifier = Modifier.height(0.dp))
+                if (achievement.isObtained) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Status",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = "Unlocked on ${achievement.obtainedDate}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.secondary,
+                        )
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Status",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = "Not yet unlocked",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        },
+    )
 }
 
 @Composable
