@@ -77,7 +77,7 @@ class ProgressViewModel(
     }
 }
 
-private fun computeAchievements(streak: Int, rows: List<SetEntryRow>): Map<String, AchievementStatus> {
+internal fun computeAchievements(streak: Int, rows: List<SetEntryRow>): Map<String, AchievementStatus> {
     val tz = TimeZone.currentSystemDefault()
 
     // Group all rows by exercise, sorted chronologically within each group

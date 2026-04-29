@@ -1,5 +1,7 @@
 package intellij.kmm.settings.grind_track.app
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
@@ -29,6 +31,10 @@ fun GymTrackNavHost(
         navController = navController,
         startDestination = TopLevelDestination.Routines.route,
         modifier = modifier,
+        enterTransition = { EnterTransition.None },
+        exitTransition = { ExitTransition.None },
+        popEnterTransition = { EnterTransition.None },
+        popExitTransition = { ExitTransition.None },
     ) {
         composable(TopLevelDestination.Routines.route) {
             RoutinesScreen(

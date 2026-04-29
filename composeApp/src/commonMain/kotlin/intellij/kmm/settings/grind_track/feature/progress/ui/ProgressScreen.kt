@@ -58,12 +58,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import grind_track.composeapp.generated.resources.Res
-import grind_track.composeapp.generated.resources.achievement_30day_streak
-import grind_track.composeapp.generated.resources.achievement_7day_streak
-import grind_track.composeapp.generated.resources.achievement_consistency
-import grind_track.composeapp.generated.resources.achievement_milestone
-import grind_track.composeapp.generated.resources.achievement_speed
-import grind_track.composeapp.generated.resources.achievement_strength
 import grind_track.composeapp.generated.resources.ic_flame
 import intellij.kmm.settings.grind_track.core.database.entity.Exercise
 import intellij.kmm.settings.grind_track.core.database.entity.ExerciseType
@@ -79,55 +73,8 @@ import kotlin.math.roundToInt
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.viewmodel.koinViewModel
-
-private data class Achievement(
-    val id: String,
-    val name: String,
-    val howToObtain: String,
-    val imageRes: DrawableResource,
-)
-
-private val allAchievements = listOf(
-    Achievement(
-        id = "7day_streak",
-        name = "Boot Sequence",
-        howToObtain = "Reach a 7-day streak by completing 7 consecutive planned workouts.",
-        imageRes = Res.drawable.achievement_7day_streak,
-    ),
-    Achievement(
-        id = "30day_streak",
-        name = "Cyberpsycho",
-        howToObtain = "Reach a 30-day streak by completing 30 consecutive planned workouts.",
-        imageRes = Res.drawable.achievement_30day_streak,
-    ),
-    Achievement(
-        id = "strength",
-        name = "Overclocked",
-        howToObtain = "Increase your max weight on any exercise by 20% compared to your first logged session.",
-        imageRes = Res.drawable.achievement_strength,
-    ),
-    Achievement(
-        id = "consistency",
-        name = "Peaked",
-        howToObtain = "Decrease your max weight on any exercise by 20% compared to your last logged session.",
-        imageRes = Res.drawable.achievement_consistency,
-    ),
-    Achievement(
-        id = "speed",
-        name = "David Martinez",
-        howToObtain = "For a time-based exercise, complete it 20% faster than your first logged session.",
-        imageRes = Res.drawable.achievement_speed,
-    ),
-    Achievement(
-        id = "milestone",
-        name = "Extra Mile",
-        howToObtain = "For a distance-based exercise, log 20% more distance than your first logged session.",
-        imageRes = Res.drawable.achievement_milestone,
-    ),
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -165,32 +112,50 @@ fun ProgressScreen(
                     )
                 },
                 actions = {
-                    IconButton(onClick = { showAchievements = true }) {
-                        Icon(
-                            imageVector = Icons.Filled.Star,
-                            contentDescription = "Achievements",
-                        )
+                    androidx.compose.material3.Surface(
+                        onClick = { showAchievements = true },
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(end = 6.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Star,
+                                contentDescription = null,
+                                modifier = Modifier.size(22.dp),
+                            )
+                            Text(
+                                text = "Achievements",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
                     }
                     if (!state.isLoading) {
                         androidx.compose.material3.Surface(
                             shape = androidx.compose.foundation.shape.CircleShape,
                             color = androidx.compose.ui.graphics.Color(0xFFFFE0CC),
                             contentColor = androidx.compose.ui.graphics.Color(0xFF8C2A00),
-                            modifier = Modifier.padding(end = 16.dp),
+                            modifier = Modifier.padding(end = 12.dp),
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
                                 Icon(
                                     painter = painterResource(Res.drawable.ic_flame),
                                     contentDescription = "Streak",
                                     tint = Color(0xFFFF6600),
+                                    modifier = Modifier.size(22.dp),
                                 )
                                 Text(
                                     text = state.streak.toString(),
-                                    style = MaterialTheme.typography.titleMedium,
+                                    style = MaterialTheme.typography.bodyMedium,
                                 )
                             }
                         }
@@ -393,7 +358,7 @@ private fun ExercisePicker(
                 label = {
                     Text(
                         exercise.name,
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                 },
                 shape = androidx.compose.foundation.shape.CircleShape,
