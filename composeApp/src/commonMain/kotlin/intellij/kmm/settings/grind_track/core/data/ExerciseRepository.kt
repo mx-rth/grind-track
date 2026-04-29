@@ -13,11 +13,17 @@ class ExerciseRepository(
         name: String,
         defaultRestSeconds: Int,
         defaultRestBetweenExercisesSeconds: Int,
+        unilateral: Boolean = false,
+        defaultRestAfterFirstSideSeconds: Int = 60,
+        bodyWeight: Boolean = false,
     ): Long = dao.insert(
         Exercise(
             name = name.trim(),
             defaultRestSeconds = defaultRestSeconds,
             defaultRestBetweenExercisesSeconds = defaultRestBetweenExercisesSeconds,
+            unilateral = unilateral,
+            defaultRestAfterFirstSideSeconds = defaultRestAfterFirstSideSeconds,
+            bodyWeight = bodyWeight,
         )
     )
 

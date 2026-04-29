@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import intellij.kmm.settings.grind_track.core.data.RoutineExerciseWithExercise
 import intellij.kmm.settings.grind_track.core.database.entity.Exercise
+import intellij.kmm.settings.grind_track.core.database.entity.Side
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -134,11 +135,25 @@ fun RoutineEditorScreen(
         AddExerciseDialog(
             catalogue = state.catalogue,
             onDismiss = { showPicker = false },
-            onCreateExercise = { name, rest, restBetween, then ->
-                viewModel.createExercise(name, rest, restBetween, then)
+            onCreateExercise = { name, rest, restBetween, unilateral, restAfterFirstSide, bodyWeight, then ->
+                viewModel.createExercise(
+                    name = name,
+                    defaultRestSeconds = rest,
+                    defaultRestBetweenExercisesSeconds = restBetween,
+                    unilateral = unilateral,
+                    defaultRestAfterFirstSideSeconds = restAfterFirstSide,
+                    bodyWeight = bodyWeight,
+                    onCreated = then,
+                )
             },
             onAdd = { exerciseId, sets, reps, restOverride, restBetweenOverride ->
-                viewModel.addExercise(exerciseId, sets, reps, restOverride, restBetweenOverride)
+                viewModel.addExercise(
+                    exerciseId = exerciseId,
+                    targetSets = sets,
+                    targetReps = reps,
+                    restSecondsOverride = restOverride,
+                    restBetweenExercisesOverride = restBetweenOverride,
+                )
                 showPicker = false
             },
         )
@@ -278,6 +293,7 @@ private fun RoutineExerciseRow(
     onMoveDown: () -> Unit,
 ) {
     val re = item.routineExercise
+    val unilateral = item.exercise.unilateral
     var setsDraft by remember(re.id) { mutableStateOf(re.targetSets.toString()) }
     var repsDraft by remember(re.id) { mutableStateOf(re.targetReps?.toString() ?: "") }
     var restDraft by remember(re.id) {
@@ -286,16 +302,31 @@ private fun RoutineExerciseRow(
     var restBetweenDraft by remember(re.id) {
         mutableStateOf(item.effectiveRestBetweenExercisesSeconds.toString())
     }
+    var restAfterFirstSideDraft by remember(re.id) {
+        mutableStateOf(item.effectiveRestAfterFirstSideSeconds.toString())
+    }
     val toFailure = re.targetReps == null
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = item.exercise.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f),
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.exercise.name,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    val badges = buildList {
+                        if (unilateral) add("Unilateral")
+                        if (item.exercise.bodyWeight) add("Body weight")
+                    }
+                    if (badges.isNotEmpty()) {
+                        Text(
+                            text = badges.joinToString(" • "),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
                 IconButton(onClick = onMoveUp) {
                     Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move up")
                 }
@@ -368,6 +399,49 @@ private fun RoutineExerciseRow(
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
+            if (unilateral) {
+                NumberField(
+                    label = "Rest between sides (s)",
+                    value = restAfterFirstSideDraft,
+                    onValueChange = { newValue ->
+                        restAfterFirstSideDraft = newValue
+                        val parsed = newValue.toIntOrNull()
+                        if (newValue.isBlank()) {
+                            if (re.restAfterFirstSideSecondsOverride != null) {
+                                onChange(re.copy(restAfterFirstSideSecondsOverride = null))
+                            }
+                        } else if (parsed != null && parsed >= 0) {
+                            val override = parsed.takeIf { it != item.exercise.defaultRestAfterFirstSideSeconds }
+                            if (override != re.restAfterFirstSideSecondsOverride) {
+                                onChange(re.copy(restAfterFirstSideSecondsOverride = override))
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Starting side",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Side.entries.forEach { side ->
+                            FilterChip(
+                                selected = re.startingSide == side,
+                                onClick = {
+                                    if (re.startingSide != side) {
+                                        onChange(re.copy(startingSide = side))
+                                    }
+                                },
+                                label = {
+                                    Text(if (side == Side.LEFT) "Left" else "Right")
+                                },
+                            )
+                        }
+                    }
+                }
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(
                     checked = toFailure,
@@ -417,7 +491,15 @@ private fun NumberField(
 private fun AddExerciseDialog(
     catalogue: List<Exercise>,
     onDismiss: () -> Unit,
-    onCreateExercise: (name: String, defaultRest: Int, defaultRestBetween: Int, onCreated: (Long) -> Unit) -> Unit,
+    onCreateExercise: (
+        name: String,
+        defaultRest: Int,
+        defaultRestBetween: Int,
+        unilateral: Boolean,
+        defaultRestAfterFirstSide: Int,
+        bodyWeight: Boolean,
+        onCreated: (Long) -> Unit,
+    ) -> Unit,
     onAdd: (exerciseId: Long, sets: Int, reps: Int?, restOverride: Int?, restBetweenOverride: Int?) -> Unit,
 ) {
     var step by remember { mutableStateOf<PickerStep>(PickerStep.List) }
@@ -475,8 +557,8 @@ private fun AddExerciseDialog(
                 )
                 PickerStep.Create -> CreateExerciseForm(
                     onCancel = { step = PickerStep.List },
-                    onCreateAndAdd = { name, rest, restBetween, sets, reps ->
-                        onCreateExercise(name, rest, restBetween) { newId ->
+                    onCreateAndAdd = { name, rest, restBetween, unilateral, restAfterFirstSide, bodyWeight, sets, reps ->
+                        onCreateExercise(name, rest, restBetween, unilateral, restAfterFirstSide, bodyWeight) { newId ->
                             onAdd(newId, sets, reps, null, null)
                         }
                     },
@@ -553,11 +635,23 @@ private fun ConfigureExerciseForm(
 @Composable
 private fun CreateExerciseForm(
     onCancel: () -> Unit,
-    onCreateAndAdd: (name: String, defaultRest: Int, defaultRestBetween: Int, sets: Int, reps: Int?) -> Unit,
+    onCreateAndAdd: (
+        name: String,
+        defaultRest: Int,
+        defaultRestBetween: Int,
+        unilateral: Boolean,
+        defaultRestAfterFirstSide: Int,
+        bodyWeight: Boolean,
+        sets: Int,
+        reps: Int?,
+    ) -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
     var rest by remember { mutableStateOf("90") }
     var restBetween by remember { mutableStateOf("180") }
+    var unilateral by remember { mutableStateOf(false) }
+    var restAfterFirstSide by remember { mutableStateOf("60") }
+    var bodyWeight by remember { mutableStateOf(false) }
     var sets by remember { mutableStateOf("3") }
     var reps by remember { mutableStateOf("8") }
     var toFailure by remember { mutableStateOf(false) }
@@ -581,6 +675,36 @@ private fun CreateExerciseForm(
             onValueChange = { restBetween = it },
             modifier = Modifier.fillMaxWidth(),
         )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = unilateral, onCheckedChange = { unilateral = it })
+            Column {
+                Text("Unilateral (left/right)", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "Each set is performed on each side separately.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (unilateral) {
+            NumberField(
+                label = "Default rest between sides (s)",
+                value = restAfterFirstSide,
+                onValueChange = { restAfterFirstSide = it },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = bodyWeight, onCheckedChange = { bodyWeight = it })
+            Column {
+                Text("Body weight", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "Tracks added weight on top of bodyweight (defaults to 0).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             NumberField("Sets", sets, { sets = it }, modifier = Modifier.weight(1f))
             NumberField(
@@ -602,11 +726,22 @@ private fun CreateExerciseForm(
                 enabled = name.isNotBlank() &&
                     rest.toIntOrNull()?.let { it > 0 } == true &&
                     restBetween.toIntOrNull()?.let { it >= 0 } == true &&
+                    (!unilateral || restAfterFirstSide.toIntOrNull()?.let { it >= 0 } == true) &&
                     sets.toIntOrNull()?.let { it > 0 } == true &&
                     (toFailure || reps.toIntOrNull()?.let { it > 0 } == true),
                 onClick = {
                     val resolvedReps = if (toFailure) null else reps.toInt()
-                    onCreateAndAdd(name.trim(), rest.toInt(), restBetween.toInt(), sets.toInt(), resolvedReps)
+                    val rafs = restAfterFirstSide.toIntOrNull()?.takeIf { it >= 0 } ?: 60
+                    onCreateAndAdd(
+                        name.trim(),
+                        rest.toInt(),
+                        restBetween.toInt(),
+                        unilateral,
+                        rafs,
+                        bodyWeight,
+                        sets.toInt(),
+                        resolvedReps,
+                    )
                 },
             ) { Text("Create & add") }
         }

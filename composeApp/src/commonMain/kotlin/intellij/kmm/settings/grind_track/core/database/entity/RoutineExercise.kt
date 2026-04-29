@@ -32,4 +32,6 @@ data class RoutineExercise(
     val targetReps: Int?,
     val restSecondsOverride: Int? = null,
     val restBetweenExercisesOverride: Int? = null,
+    val restAfterFirstSideSecondsOverride: Int? = null,
+    val startingSide: Side = Side.LEFT,
 )

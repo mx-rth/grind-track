@@ -32,4 +32,5 @@ data class SetEntry(
     val weight: Double,
     val reps: Int,
     val completedAt: Instant,
+    val side: Side? = null,
 )

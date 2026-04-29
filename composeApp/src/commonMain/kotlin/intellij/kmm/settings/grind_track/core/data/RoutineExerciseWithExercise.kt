@@ -12,4 +12,8 @@ data class RoutineExerciseWithExercise(
 
     val effectiveRestBetweenExercisesSeconds: Int
         get() = routineExercise.restBetweenExercisesOverride ?: exercise.defaultRestBetweenExercisesSeconds
+
+    val effectiveRestAfterFirstSideSeconds: Int
+        get() = routineExercise.restAfterFirstSideSecondsOverride
+            ?: exercise.defaultRestAfterFirstSideSeconds
 }

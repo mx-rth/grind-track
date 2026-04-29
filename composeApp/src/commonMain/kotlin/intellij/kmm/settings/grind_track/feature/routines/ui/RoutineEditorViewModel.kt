@@ -71,6 +71,9 @@ class RoutineEditorViewModel(
         targetReps: Int?,
         restSecondsOverride: Int?,
         restBetweenExercisesOverride: Int?,
+        restAfterFirstSideSecondsOverride: Int? = null,
+        startingSide: intellij.kmm.settings.grind_track.core.database.entity.Side =
+            intellij.kmm.settings.grind_track.core.database.entity.Side.LEFT,
     ) {
         viewModelScope.launch {
             routineRepository.addExerciseToRoutine(
@@ -80,6 +83,8 @@ class RoutineEditorViewModel(
                 targetReps = targetReps,
                 restSecondsOverride = restSecondsOverride,
                 restBetweenExercisesOverride = restBetweenExercisesOverride,
+                restAfterFirstSideSecondsOverride = restAfterFirstSideSecondsOverride,
+                startingSide = startingSide,
             )
         }
     }
@@ -104,6 +109,9 @@ class RoutineEditorViewModel(
         name: String,
         defaultRestSeconds: Int,
         defaultRestBetweenExercisesSeconds: Int,
+        unilateral: Boolean = false,
+        defaultRestAfterFirstSideSeconds: Int = 60,
+        bodyWeight: Boolean = false,
         onCreated: (Long) -> Unit,
     ) {
         if (name.isBlank()) return
@@ -112,6 +120,9 @@ class RoutineEditorViewModel(
                 name = name,
                 defaultRestSeconds = defaultRestSeconds,
                 defaultRestBetweenExercisesSeconds = defaultRestBetweenExercisesSeconds,
+                unilateral = unilateral,
+                defaultRestAfterFirstSideSeconds = defaultRestAfterFirstSideSeconds,
+                bodyWeight = bodyWeight,
             )
             onCreated(id)
         }

@@ -3,6 +3,7 @@ package intellij.kmm.settings.grind_track.core.data
 import intellij.kmm.settings.grind_track.core.database.dao.SetEntryDao
 import intellij.kmm.settings.grind_track.core.database.dao.WorkoutSessionDao
 import intellij.kmm.settings.grind_track.core.database.entity.SetEntry
+import intellij.kmm.settings.grind_track.core.database.entity.Side
 import intellij.kmm.settings.grind_track.core.database.entity.WorkoutSession
 import kotlin.time.Clock
 import kotlinx.coroutines.flow.Flow
@@ -30,6 +31,7 @@ class WorkoutRepository(
         setIndex: Int,
         weight: Double,
         reps: Int,
+        side: Side? = null,
     ): Long = setEntryDao.insert(
         SetEntry(
             sessionId = sessionId,
@@ -38,6 +40,7 @@ class WorkoutRepository(
             weight = weight,
             reps = reps,
             completedAt = Clock.System.now(),
+            side = side,
         )
     )
 }

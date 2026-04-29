@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -50,6 +51,7 @@ import grind_track.composeapp.generated.resources.ic_flame
 import org.jetbrains.compose.resources.painterResource
 import intellij.kmm.settings.grind_track.core.database.entity.Exercise
 import intellij.kmm.settings.grind_track.core.database.entity.SetEntry
+import intellij.kmm.settings.grind_track.core.database.entity.Side
 import intellij.kmm.settings.grind_track.core.designsystem.EmptyState
 import kotlin.math.roundToInt
 import kotlinx.datetime.LocalDate
@@ -124,7 +126,10 @@ private fun LoadedContent(
                 subtitle = "Log a set in the Workout tab to see it here.",
             )
         } else {
-            HistoryList(history = state.history)
+            val selectedExercise = state.exercises.firstOrNull { it.id == state.selectedExerciseId }
+            val hideWeightChart = selectedExercise?.bodyWeight == true &&
+                state.history.all { it.weight == 0.0 }
+            HistoryList(history = state.history, hideWeightChart = hideWeightChart)
         }
     }
 }
@@ -150,7 +155,7 @@ private fun ExercisePicker(
 }
 
 @Composable
-private fun HistoryList(history: List<SetEntry>) {
+private fun HistoryList(history: List<SetEntry>, hideWeightChart: Boolean = false) {
     val timeZone = TimeZone.currentSystemDefault()
     val grouped = history.groupBy { entry ->
         entry.completedAt.toLocalDateTime(timeZone).date
@@ -169,8 +174,14 @@ private fun HistoryList(history: List<SetEntry>) {
     val weightBySession: List<Pair<String, List<Double>>> = sessionGroups.mapIndexed { i, (_, entries) ->
         sessionLabels[i] to entries.map { it.weight }
     }
-    val repsBySession: List<Pair<String, Int>> = sessionGroups.mapIndexed { i, (_, entries) ->
-        sessionLabels[i] to entries.sumOf { it.reps }
+    val hasUnilateral = history.any { it.side != null }
+    val repsBySession: List<RepsBarData> = sessionGroups.mapIndexed { i, (_, entries) ->
+        RepsBarData(
+            label = sessionLabels[i],
+            total = entries.sumOf { it.reps },
+            leftReps = entries.filter { it.side == Side.LEFT }.sumOf { it.reps },
+            rightReps = entries.filter { it.side == Side.RIGHT }.sumOf { it.reps },
+        )
     }
 
     LazyColumn(
@@ -178,11 +189,13 @@ private fun HistoryList(history: List<SetEntry>) {
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item(key = "weight_chart") {
-            WeightProgressionChart(dataPoints = weightBySession)
+        if (!hideWeightChart) {
+            item(key = "weight_chart") {
+                WeightProgressionChart(dataPoints = weightBySession)
+            }
         }
         item(key = "reps_chart") {
-            RepsBarChart(dataPoints = repsBySession)
+            RepsBarChart(dataPoints = repsBySession, hasUnilateral = hasUnilateral)
         }
         grouped.forEach { (date, entries) ->
             item(key = date.toString()) {
@@ -193,7 +206,8 @@ private fun HistoryList(history: List<SetEntry>) {
                             style = MaterialTheme.typography.titleMedium,
                         )
                         entries.forEachIndexed { idx, entry ->
-                            SetEntryRow(index = idx + 1, entry = entry)
+                            val displayIndex = if (entry.side != null) entry.setIndex else idx + 1
+                            SetEntryRow(index = displayIndex, entry = entry)
                         }
                     }
                 }
@@ -331,16 +345,41 @@ private fun WeightProgressionChart(dataPoints: List<Pair<String, List<Double>>>)
     }
 }
 
+private data class RepsBarData(
+    val label: String,
+    val total: Int,
+    val leftReps: Int,
+    val rightReps: Int,
+)
+
+private enum class RepsMode(val label: String) {
+    Total("Total"),
+    BySide("By side"),
+}
+
 @Composable
-private fun RepsBarChart(dataPoints: List<Pair<String, Int>>) {
+private fun RepsBarChart(dataPoints: List<RepsBarData>, hasUnilateral: Boolean) {
     val textMeasurer = rememberTextMeasurer()
     val secondaryColor = MaterialTheme.colorScheme.secondary
     val onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant
     val outlineVariantColor = MaterialTheme.colorScheme.outlineVariant
+    val leftSideColor = Color(0xFFE53935)
+    val rightSideColor = Color(0xFF1E88E5)
+
+    var mode by remember(hasUnilateral) {
+        mutableStateOf(if (hasUnilateral) RepsMode.BySide else RepsMode.Total)
+    }
+    var dropdownExpanded by remember { mutableStateOf(false) }
 
     val n = dataPoints.size
-    val minReps = if (n > 0) dataPoints.minOf { it.second } else 0
-    val maxReps = if (n > 0) dataPoints.maxOf { it.second } else 0
+    val maxReps = if (n == 0) 0 else when (mode) {
+        RepsMode.Total -> dataPoints.maxOf { it.total }
+        RepsMode.BySide -> dataPoints.maxOf { maxOf(it.leftReps, it.rightReps) }
+    }
+    val minReps = if (n == 0) 0 else when (mode) {
+        RepsMode.Total -> dataPoints.minOf { it.total }
+        RepsMode.BySide -> dataPoints.minOf { minOf(it.leftReps, it.rightReps) }
+    }
     val rangePad = if (maxReps == minReps) maxReps * 0.15f else (maxReps - minReps) * 0.15f
     val displayMin = (minReps - rangePad).coerceAtLeast(0f)
     val displayMax = (maxReps + rangePad).coerceAtLeast(1f)
@@ -348,7 +387,40 @@ private fun RepsBarChart(dataPoints: List<Pair<String, Int>>) {
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Reps per Session", style = MaterialTheme.typography.titleSmall)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Reps per Session", style = MaterialTheme.typography.titleSmall)
+                if (hasUnilateral) {
+                    Box {
+                        TextButton(
+                            onClick = { dropdownExpanded = true },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        ) {
+                            Text(mode.label, style = MaterialTheme.typography.labelMedium)
+                        }
+                        DropdownMenu(
+                            expanded = dropdownExpanded,
+                            onDismissRequest = { dropdownExpanded = false },
+                        ) {
+                            RepsMode.entries.forEach { m ->
+                                DropdownMenuItem(
+                                    text = { Text(m.label) },
+                                    onClick = { mode = m; dropdownExpanded = false },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            if (mode == RepsMode.BySide) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    LegendDot(color = leftSideColor, label = "Left")
+                    LegendDot(color = rightSideColor, label = "Right")
+                }
+            }
             Canvas(modifier = Modifier.fillMaxWidth().height(130.dp)) {
                 val leftPad = 52.dp.toPx()
                 val rightPad = 12.dp.toPx()
@@ -357,7 +429,6 @@ private fun RepsBarChart(dataPoints: List<Pair<String, Int>>) {
                 val cw = size.width - leftPad - rightPad
                 val ch = size.height - topPad - bottomPad
 
-                // Y-axis gridlines and labels
                 for (i in 0..3) {
                     val frac = i.toFloat() / 3f
                     val y = topPad + ch * (1f - frac)
@@ -376,23 +447,55 @@ private fun RepsBarChart(dataPoints: List<Pair<String, Int>>) {
                     )
                 }
 
-                // Bars and X-axis labels
                 val slotWidth = cw / n.coerceAtLeast(1)
-                val barWidth = slotWidth * 0.6f
+                val groupWidth = slotWidth * 0.6f
                 val labelStep = ((n.toFloat() / 5f).coerceAtLeast(1f)).toInt()
+                val cornerRadius = CornerRadius(3.dp.toPx())
 
                 for (i in 0 until n) {
                     val cx = leftPad + i * slotWidth + slotWidth / 2f
-                    val frac = ((dataPoints[i].second - displayMin) / range).coerceIn(0f, 1f)
-                    val barHeight = (ch * frac).coerceAtLeast(2.dp.toPx())
-                    drawRoundRect(
-                        color = secondaryColor,
-                        topLeft = Offset(cx - barWidth / 2f, topPad + ch - barHeight),
-                        size = Size(barWidth, barHeight),
-                        cornerRadius = CornerRadius(3.dp.toPx()),
-                    )
+                    when (mode) {
+                        RepsMode.Total -> {
+                            val frac = ((dataPoints[i].total - displayMin) / range).coerceIn(0f, 1f)
+                            val barHeight = (ch * frac).coerceAtLeast(2.dp.toPx())
+                            drawRoundRect(
+                                color = secondaryColor,
+                                topLeft = Offset(cx - groupWidth / 2f, topPad + ch - barHeight),
+                                size = Size(groupWidth, barHeight),
+                                cornerRadius = cornerRadius,
+                            )
+                        }
+                        RepsMode.BySide -> {
+                            val gap = 2.dp.toPx()
+                            val singleWidth = (groupWidth - gap) / 2f
+                            val leftFrac = ((dataPoints[i].leftReps - displayMin) / range).coerceIn(0f, 1f)
+                            val rightFrac = ((dataPoints[i].rightReps - displayMin) / range).coerceIn(0f, 1f)
+                            val leftHeight = if (dataPoints[i].leftReps > 0)
+                                (ch * leftFrac).coerceAtLeast(2.dp.toPx())
+                            else 0f
+                            val rightHeight = if (dataPoints[i].rightReps > 0)
+                                (ch * rightFrac).coerceAtLeast(2.dp.toPx())
+                            else 0f
+                            if (leftHeight > 0f) {
+                                drawRoundRect(
+                                    color = leftSideColor,
+                                    topLeft = Offset(cx - groupWidth / 2f, topPad + ch - leftHeight),
+                                    size = Size(singleWidth, leftHeight),
+                                    cornerRadius = cornerRadius,
+                                )
+                            }
+                            if (rightHeight > 0f) {
+                                drawRoundRect(
+                                    color = rightSideColor,
+                                    topLeft = Offset(cx - groupWidth / 2f + singleWidth + gap, topPad + ch - rightHeight),
+                                    size = Size(singleWidth, rightHeight),
+                                    cornerRadius = cornerRadius,
+                                )
+                            }
+                        }
+                    }
                     if (i % labelStep == 0) {
-                        val measured = textMeasurer.measure(dataPoints[i].first, TextStyle(fontSize = 9.sp))
+                        val measured = textMeasurer.measure(dataPoints[i].label, TextStyle(fontSize = 9.sp))
                         drawText(
                             measured,
                             color = onSurfaceVariantColor,
@@ -406,22 +509,56 @@ private fun RepsBarChart(dataPoints: List<Pair<String, Int>>) {
 }
 
 @Composable
+private fun LegendDot(color: Color, label: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Canvas(modifier = Modifier.size(10.dp)) {
+            drawCircle(color = color, radius = size.minDimension / 2f)
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
 private fun SetEntryRow(index: Int, entry: SetEntry) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = "Set $index",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = "Set $index",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            entry.side?.let { side ->
+                Text(
+                    text = sideAbbreviation(side),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.tertiary,
+                )
+            }
+        }
         Text(
             text = "${formatWeight(entry.weight)} × ${entry.reps}",
             style = MaterialTheme.typography.bodyLarge,
         )
     }
+}
+
+private fun sideAbbreviation(side: Side): String = when (side) {
+    Side.LEFT -> "L"
+    Side.RIGHT -> "R"
 }
 
 private fun formatWeight(weight: Double): String =
