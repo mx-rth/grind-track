@@ -25,7 +25,10 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 sealed interface Phase {
-    data object Working : Phase
+    data class Working(
+        val stopwatchElapsed: Double? = null,
+        val countdownRemaining: Double? = null,
+    ) : Phase
 
     data class Resting(
         val totalSeconds: Int,
@@ -101,12 +104,14 @@ class WorkoutViewModel(
 ) : ViewModel() {
 
     private val position = MutableStateFlow(Position.START)
-    private val phase = MutableStateFlow<Phase>(Phase.Working)
+    private val phase = MutableStateFlow<Phase>(Phase.Working())
 
     /** Last submitted measurements per `(routineExerciseId, side?)`, used to prefill the rest form. */
     private val lastSubmitted = mutableMapOf<Pair<Long, Side?>, LastEntry>()
 
     private var timerJob: Job? = null
+    private var stopwatchJob: Job? = null
+    private var countdownJob: Job? = null
 
     val state: StateFlow<WorkoutUiState> =
         workoutRepository.observeActiveSession()
@@ -148,15 +153,17 @@ class WorkoutViewModel(
     fun startSession(routineId: Long) {
         viewModelScope.launch {
             position.value = Position.START
-            phase.value = Phase.Working
+            phase.value = Phase.Working()
             workoutRepository.startSession(routineId)
         }
     }
 
     /** From Working: enter Resting, prefill the form, start the countdown. */
-    fun markSetComplete() {
+    fun markSetComplete(stopwatchOverride: Double? = null) {
         val current = state.value as? WorkoutUiState.InSession ?: return
         if (current.phase !is Phase.Working) return
+        cancelStopwatch()
+        cancelCountdownJob()
         val exercise = current.currentExercise ?: return
         val unilateral = exercise.exercise.unilateral
         val isFirstSide = unilateral && current.currentSideIndex == 0
@@ -187,6 +194,7 @@ class WorkoutViewModel(
         }
         val durationDraft = when {
             exercise.exercise.type != ExerciseType.TIME -> ""
+            stopwatchOverride != null -> formatStopwatch(stopwatchOverride)
             last.duration > 0.0 -> formatDoubleStripped(last.duration)
             else -> ""
         }
@@ -207,6 +215,80 @@ class WorkoutViewModel(
         }
         restTimerAlarm.schedule(totalSeconds, exerciseName = alarmName)
         startTimer(totalSeconds)
+    }
+
+    /** Begin a stopwatch in the current Working phase (TIME exercises only). */
+    fun startStopwatch() {
+        val current = state.value as? WorkoutUiState.InSession ?: return
+        val working = current.phase as? Phase.Working ?: return
+        val exercise = current.currentExercise ?: return
+        if (exercise.exercise.type != ExerciseType.TIME) return
+        if (working.stopwatchElapsed != null) return
+        phase.value = Phase.Working(stopwatchElapsed = 0.0)
+        cancelStopwatch()
+        stopwatchJob = viewModelScope.launch {
+            val startMs = kotlin.time.Clock.System.now().toEpochMilliseconds()
+            while (true) {
+                delay(100)
+                val elapsed = (kotlin.time.Clock.System.now().toEpochMilliseconds() - startMs) / 1000.0
+                val cur = phase.value as? Phase.Working ?: return@launch
+                phase.value = cur.copy(stopwatchElapsed = elapsed)
+            }
+        }
+    }
+
+    /** Stop the running stopwatch and transition to Resting with the elapsed time pre-filled. */
+    fun stopStopwatch() {
+        val current = state.value as? WorkoutUiState.InSession ?: return
+        val working = current.phase as? Phase.Working ?: return
+        val elapsed = working.stopwatchElapsed ?: return
+        markSetComplete(stopwatchOverride = elapsed)
+    }
+
+    private fun cancelStopwatch() {
+        stopwatchJob?.cancel()
+        stopwatchJob = null
+    }
+
+    /** Begin a countdown for DISTANCE exercises with a configured target duration. */
+    fun startCountdown() {
+        val current = state.value as? WorkoutUiState.InSession ?: return
+        val working = current.phase as? Phase.Working ?: return
+        val exercise = current.currentExercise ?: return
+        if (exercise.exercise.type != ExerciseType.DISTANCE) return
+        val target = exercise.routineExercise.targetDurationSeconds ?: return
+        if (target <= 0.0) return
+        if (working.countdownRemaining != null) return
+        cancelCountdownJob()
+        phase.value = Phase.Working(countdownRemaining = target)
+        val totalInt = target.toInt().coerceAtLeast(1)
+        restTimerAlarm.scheduleNotificationOnly(totalInt, exerciseName = exercise.exercise.name)
+        countdownJob = viewModelScope.launch {
+            val startMs = kotlin.time.Clock.System.now().toEpochMilliseconds()
+            while (true) {
+                delay(100)
+                val elapsed = (kotlin.time.Clock.System.now().toEpochMilliseconds() - startMs) / 1000.0
+                val remaining = (target - elapsed).coerceAtLeast(0.0)
+                val cur = phase.value as? Phase.Working ?: return@launch
+                phase.value = cur.copy(countdownRemaining = remaining)
+                if (remaining <= 0.0) return@launch
+            }
+        }
+    }
+
+    /** Cancel a running countdown without leaving the Working phase. */
+    fun cancelCountdown() {
+        cancelCountdownJob()
+        val cur = phase.value as? Phase.Working ?: return
+        if (cur.countdownRemaining != null) {
+            phase.value = cur.copy(countdownRemaining = null)
+            restTimerAlarm.cancel()
+        }
+    }
+
+    private fun cancelCountdownJob() {
+        countdownJob?.cancel()
+        countdownJob = null
     }
 
     fun updateRestForm(
@@ -281,7 +363,7 @@ class WorkoutViewModel(
                 if (exercise != null && exercise.exercise.unilateral && current.currentSideIndex == 0) {
                     cancelTimerAndAlarm()
                     position.value = position.value.copy(sideIndex = 1)
-                    phase.value = Phase.Working
+                    phase.value = Phase.Working()
                 } else {
                     advanceFrom(current)
                 }
@@ -289,19 +371,21 @@ class WorkoutViewModel(
             is Phase.RestingBeforeNextExercise -> {
                 cancelTimerAndAlarm()
                 position.value = Position(current.currentExerciseIndex + 1, 1, 0)
-                phase.value = Phase.Working
+                phase.value = Phase.Working()
             }
-            Phase.Working -> Unit
+            is Phase.Working -> Unit
         }
     }
 
     fun finishSession() {
         val current = state.value as? WorkoutUiState.InSession ?: return
         cancelTimerAndAlarm()
+        cancelStopwatch()
+        cancelCountdownJob()
         viewModelScope.launch {
             workoutRepository.finishSession(current.session.id)
             position.value = Position.START
-            phase.value = Phase.Working
+            phase.value = Phase.Working()
         }
     }
 
@@ -312,14 +396,14 @@ class WorkoutViewModel(
         when {
             current.currentSetIndex < totalSets -> {
                 position.value = Position(current.currentExerciseIndex, current.currentSetIndex + 1, 0)
-                phase.value = Phase.Working
+                phase.value = Phase.Working()
             }
             current.currentExerciseIndex < current.exercises.lastIndex -> {
                 val nextExercise = current.exercises[current.currentExerciseIndex + 1]
                 val restSeconds = currentExercise.effectiveRestBetweenExercisesSeconds
                 if (restSeconds <= 0) {
                     position.value = Position(current.currentExerciseIndex + 1, 1, 0)
-                    phase.value = Phase.Working
+                    phase.value = Phase.Working()
                 } else {
                     phase.value = Phase.RestingBeforeNextExercise(
                         totalSeconds = restSeconds,
@@ -334,7 +418,7 @@ class WorkoutViewModel(
                 viewModelScope.launch {
                     workoutRepository.finishSession(current.session.id)
                     position.value = Position.START
-                    phase.value = Phase.Working
+                    phase.value = Phase.Working()
                 }
             }
         }
@@ -350,7 +434,7 @@ class WorkoutViewModel(
                 phase.value = when (val current = phase.value) {
                     is Phase.Resting -> current.copy(remainingSeconds = remaining)
                     is Phase.RestingBeforeNextExercise -> current.copy(remainingSeconds = remaining)
-                    Phase.Working -> return@launch
+                    is Phase.Working -> return@launch
                 }
             }
         }
@@ -369,6 +453,22 @@ class WorkoutViewModel(
     override fun onCleared() {
         super.onCleared()
         cancelTimerAndAlarm()
+        cancelStopwatch()
+        cancelCountdownJob()
+    }
+}
+
+internal fun formatStopwatch(seconds: Double): String {
+    val tenths = (seconds * 10).toInt()
+    val whole = tenths / 10
+    val frac = tenths % 10
+    return if (whole < 60) {
+        "$whole.$frac"
+    } else {
+        val mins = whole / 60
+        val secs = whole - mins * 60
+        val secsStr = if (secs < 10) "0$secs" else secs.toString()
+        "$mins:$secsStr.$frac"
     }
 }
 

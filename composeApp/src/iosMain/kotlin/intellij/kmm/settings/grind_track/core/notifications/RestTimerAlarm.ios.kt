@@ -20,6 +20,7 @@ import platform.darwin.NSObject
 
 private const val IDENTIFIER_INITIAL = "rest_timer_alarm"
 private const val IDENTIFIER_FOLLOWUP = "rest_timer_alarm_followup"
+private const val IDENTIFIER_NOTIFICATION_ONLY = "countdown_notification"
 private const val FOLLOWUP_DELAY_SECONDS = 15
 
 actual class RestTimerAlarm(
@@ -99,8 +100,32 @@ actual class RestTimerAlarm(
         ) { _: NSError? -> /* result ignored */ }
     }
 
+    @OptIn(ExperimentalForeignApi::class)
+    actual fun scheduleNotificationOnly(seconds: Int, exerciseName: String) {
+        center.removePendingNotificationRequestsWithIdentifiers(listOf(IDENTIFIER_NOTIFICATION_ONLY))
+        center.removeDeliveredNotificationsWithIdentifiers(listOf(IDENTIFIER_NOTIFICATION_ONLY))
+        val title = "Time's up"
+        val body = if (exerciseName.isNotBlank()) "$exerciseName complete" else "Countdown complete"
+        val content = UNMutableNotificationContent().apply {
+            setTitle(title)
+            setBody(body)
+            setSound(UNNotificationSound.defaultSound)
+        }
+        val trigger = UNTimeIntervalNotificationTrigger.triggerWithTimeInterval(
+            timeInterval = seconds.toDouble().coerceAtLeast(1.0),
+            repeats = false,
+        )
+        center.addNotificationRequest(
+            UNNotificationRequest.requestWithIdentifier(
+                identifier = IDENTIFIER_NOTIFICATION_ONLY,
+                content = content,
+                trigger = trigger,
+            ),
+        ) { _: NSError? -> /* result ignored */ }
+    }
+
     actual fun cancel() {
-        val ids = listOf(IDENTIFIER_INITIAL, IDENTIFIER_FOLLOWUP)
+        val ids = listOf(IDENTIFIER_INITIAL, IDENTIFIER_FOLLOWUP, IDENTIFIER_NOTIFICATION_ONLY)
         center.removePendingNotificationRequestsWithIdentifiers(ids)
         center.removeDeliveredNotificationsWithIdentifiers(ids)
     }

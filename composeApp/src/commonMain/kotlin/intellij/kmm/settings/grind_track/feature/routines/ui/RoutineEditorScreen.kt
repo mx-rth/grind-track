@@ -48,6 +48,16 @@ import intellij.kmm.settings.grind_track.core.data.RoutineExerciseWithExercise
 import intellij.kmm.settings.grind_track.core.database.entity.Exercise
 import intellij.kmm.settings.grind_track.core.database.entity.ExerciseType
 import intellij.kmm.settings.grind_track.core.database.entity.Side
+import intellij.kmm.settings.grind_track.core.designsystem.AccentBadge
+import intellij.kmm.settings.grind_track.core.designsystem.BrandColors
+import intellij.kmm.settings.grind_track.core.designsystem.HeroCard
+import intellij.kmm.settings.grind_track.core.designsystem.SectionHeader
+import intellij.kmm.settings.grind_track.core.designsystem.StripedCard
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Surface
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -62,6 +72,7 @@ fun RoutineEditorScreen(
     var showPicker by remember { mutableStateOf(false) }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 navigationIcon = {
@@ -69,35 +80,107 @@ fun RoutineEditorScreen(
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                title = { Text("Edit routine") },
+                title = {
+                    Text(
+                        "Edit routine",
+                        style = MaterialTheme.typography.headlineMedium,
+                    )
+                },
+                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.background,
+                ),
             )
         },
     ) { padding ->
+        val routine = state.routine
+        if (routine == null) {
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier.fillMaxSize().padding(padding),
+            )
+            return@Scaffold
+        }
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            val routine = state.routine
-            if (routine != null) {
-                item(key = "name") {
+            item(key = "hero") {
                     var nameDraft by remember(routine.id, routine.name) { mutableStateOf(routine.name) }
-                    OutlinedTextField(
-                        value = nameDraft,
-                        onValueChange = {
-                            nameDraft = it
-                            viewModel.renameRoutine(it)
-                        },
-                        label = { Text("Routine name") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    HeroCard(
+                        color = BrandColors.Cyan,
+                        onColor = BrandColors.InkNavy,
+                    ) {
+                        AccentBadge(
+                            text = "Routine",
+                            container = BrandColors.InkNavy,
+                            onContainer = BrandColors.SunYellow,
+                        )
+                        OutlinedTextField(
+                            value = nameDraft,
+                            onValueChange = {
+                                nameDraft = it
+                                viewModel.renameRoutine(it)
+                            },
+                            label = null,
+                            placeholder = {
+                                Text(
+                                    "Name your routine",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    color = BrandColors.InkNavy.copy(alpha = 0.4f),
+                                )
+                            },
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.headlineSmall.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                            ),
+                            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = Color.White.copy(alpha = 0.55f),
+                                unfocusedContainerColor = Color.White.copy(alpha = 0.35f),
+                                focusedBorderColor = BrandColors.InkNavy,
+                                unfocusedBorderColor = Color.Transparent,
+                                cursorColor = BrandColors.InkNavy,
+                            ),
+                            shape = MaterialTheme.shapes.medium,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            AccentBadge(
+                                text = "${state.exercises.size} exercises",
+                                container = BrandColors.InkNavy.copy(alpha = 0.12f),
+                                onContainer = BrandColors.InkNavy,
+                            )
+                            if (routine.scheduledDays.isNotEmpty()) {
+                                AccentBadge(
+                                    text = "${routine.scheduledDays.size}d/wk",
+                                    container = BrandColors.InkNavy,
+                                    onContainer = BrandColors.SunYellow,
+                                )
+                            }
+                            if (routine.notificationEnabled) {
+                                AccentBadge(
+                                    text = "Reminder on",
+                                    container = BrandColors.Coral,
+                                    onContainer = Color.White,
+                                )
+                            }
+                        }
+                    }
+                }
+                item(key = "schedule-section") {
+                    SectionHeader(text = "Training days", accent = BrandColors.Coral)
                 }
                 item(key = "schedule") {
                     ScheduleDayPicker(
                         selected = routine.scheduledDays,
                         onToggle = viewModel::toggleScheduledDay,
                     )
+                }
+                item(key = "notifications-section") {
+                    SectionHeader(text = "Reminder", accent = BrandColors.Magenta)
                 }
                 item(key = "notifications") {
                     NotificationToggleRow(
@@ -108,6 +191,8 @@ fun RoutineEditorScreen(
                         onPickTime = viewModel::setNotificationTime,
                     )
                 }
+            item(key = "exercises-section") {
+                SectionHeader(text = "Exercises", accent = BrandColors.Electric)
             }
 
             items(state.exercises, key = { it.routineExercise.id }) { item ->
@@ -124,9 +209,18 @@ fun RoutineEditorScreen(
                 Button(
                     onClick = { showPicker = true },
                     modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large,
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = BrandColors.InkNavy,
+                        contentColor = BrandColors.SunYellow,
+                    ),
+                    contentPadding = PaddingValues(vertical = 14.dp),
                 ) {
                     Icon(Icons.Filled.Add, contentDescription = null)
-                    Text("  Add exercise")
+                    Text(
+                        "  Add exercise",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
                 }
             }
         }
@@ -174,38 +268,66 @@ private fun NotificationToggleRow(
     onPickTime: (Int) -> Unit,
 ) {
     var showPicker by remember { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
+    val container = if (enabled) BrandColors.MagentaSoft else MaterialTheme.colorScheme.surface
+    val onContainer = if (enabled) BrandColors.Magenta else MaterialTheme.colorScheme.onSurface
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = container,
+        contentColor = onContainer,
+        tonalElevation = 1.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(
-                text = "Reminder notification",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f),
-            )
-            Switch(checked = enabled, onCheckedChange = onToggleEnabled)
-        }
-        if (enabled) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = "Time: ${formatMinuteOfDay(minuteOfDay)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = { showPicker = true }) {
-                    Text(if (minuteOfDay == null) "Set time" else "Change")
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Reminder notification",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        text = "Get a nudge before training time",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = onContainer.copy(alpha = 0.75f),
+                    )
                 }
-            }
-            if (!hasScheduledDays) {
-                Text(
-                    text = "Pick training days above to receive reminders.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = onToggleEnabled,
+                    colors = androidx.compose.material3.SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = BrandColors.Magenta,
+                        uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                        uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    ),
                 )
+            }
+            if (enabled) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AccentBadge(
+                        text = formatMinuteOfDay(minuteOfDay),
+                        container = BrandColors.Magenta,
+                        onContainer = Color.White,
+                    )
+                    androidx.compose.foundation.layout.Box(modifier = Modifier.weight(1f))
+                    TextButton(onClick = { showPicker = true }) {
+                        Text(if (minuteOfDay == null) "Set time" else "Change")
+                    }
+                }
+                if (!hasScheduledDays) {
+                    Text(
+                        text = "Pick training days above to receive reminders.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
         }
     }
@@ -258,32 +380,53 @@ private fun ScheduleDayPicker(
     selected: Set<DayOfWeek>,
     onToggle: (DayOfWeek) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            text = "Training days",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            items(DayOfWeek.entries) { day ->
-                FilterChip(
-                    selected = day in selected,
-                    onClick = { onToggle(day) },
-                    label = {
-                        Text(
-                            text = when (day) {
-                                DayOfWeek.MONDAY -> "Mo"
-                                DayOfWeek.TUESDAY -> "Tu"
-                                DayOfWeek.WEDNESDAY -> "We"
-                                DayOfWeek.THURSDAY -> "Th"
-                                DayOfWeek.FRIDAY -> "Fr"
-                                DayOfWeek.SATURDAY -> "Sa"
-                                DayOfWeek.SUNDAY -> "Su"
-                            },
-                        )
-                    },
-                )
-            }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        DayOfWeek.entries.forEach { day ->
+            DayPill(
+                label = when (day) {
+                    DayOfWeek.MONDAY -> "M"
+                    DayOfWeek.TUESDAY -> "T"
+                    DayOfWeek.WEDNESDAY -> "W"
+                    DayOfWeek.THURSDAY -> "T"
+                    DayOfWeek.FRIDAY -> "F"
+                    DayOfWeek.SATURDAY -> "S"
+                    DayOfWeek.SUNDAY -> "S"
+                },
+                selected = day in selected,
+                onClick = { onToggle(day) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun DayPill(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val container = if (selected) BrandColors.Coral else MaterialTheme.colorScheme.surface
+    val onContainer = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = container,
+        contentColor = onContainer,
+        tonalElevation = if (selected) 0.dp else 1.dp,
+        modifier = Modifier.padding(2.dp),
+    ) {
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
+            )
         }
     }
 }
@@ -318,30 +461,49 @@ private fun RoutineExerciseRow(
         mutableStateOf(re.targetDurationSeconds?.let { formatDoubleStripped(it) } ?: "")
     }
     val toFailure = isStrength && re.targetReps == null
+    val typeAccent = when (type) {
+        ExerciseType.STRENGTH -> BrandColors.Coral
+        ExerciseType.DISTANCE -> BrandColors.Cyan
+        ExerciseType.TIME -> BrandColors.Magenta
+    }
+    val typeLabel = when (type) {
+        ExerciseType.STRENGTH -> "Strength"
+        ExerciseType.DISTANCE -> "Distance"
+        ExerciseType.TIME -> "Time"
+    }
 
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    StripedCard(accent = typeAccent) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = item.exercise.name,
                         style = MaterialTheme.typography.titleMedium,
                     )
-                    val badges = buildList {
-                        when (type) {
-                            ExerciseType.STRENGTH -> {}
-                            ExerciseType.DISTANCE -> add("Distance")
-                            ExerciseType.TIME -> add("Time")
-                        }
-                        if (unilateral) add("Unilateral")
-                        if (isStrength && item.exercise.bodyWeight) add("Body weight")
-                    }
-                    if (badges.isNotEmpty()) {
-                        Text(
-                            text = badges.joinToString(" • "),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 4.dp),
+                    ) {
+                        AccentBadge(
+                            text = typeLabel,
+                            container = typeAccent,
+                            onContainer = Color.White,
                         )
+                        if (unilateral) {
+                            AccentBadge(
+                                text = "L/R",
+                                container = BrandColors.Electric,
+                                onContainer = Color.White,
+                            )
+                        }
+                        if (isStrength && item.exercise.bodyWeight) {
+                            AccentBadge(
+                                text = "Body",
+                                container = BrandColors.SunYellow,
+                                onContainer = BrandColors.InkNavy,
+                            )
+                        }
                     }
                 }
                 IconButton(onClick = onMoveUp) {

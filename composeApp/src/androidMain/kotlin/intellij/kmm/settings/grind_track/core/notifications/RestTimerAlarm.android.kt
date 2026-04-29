@@ -9,11 +9,14 @@ import androidx.core.content.getSystemService
 
 private const val REQUEST_CODE_INITIAL = 0x6711
 private const val REQUEST_CODE_FOLLOWUP = 0x6712
+private const val REQUEST_CODE_NOTIFICATION_ONLY = 0x6713
 private const val FOLLOWUP_DELAY_SECONDS = 15
 
 internal const val ACTION_REST_DONE = "intellij.kmm.settings.grind_track.action.REST_DONE"
 internal const val ACTION_REST_FOLLOWUP_DONE =
     "intellij.kmm.settings.grind_track.action.REST_FOLLOWUP_DONE"
+internal const val ACTION_COUNTDOWN_DONE =
+    "intellij.kmm.settings.grind_track.action.COUNTDOWN_DONE"
 internal const val EXTRA_EXERCISE_NAME = "exerciseName"
 internal const val EXTRA_CHANNEL_ID = "channelId"
 
@@ -60,10 +63,24 @@ actual class RestTimerAlarm(
         scheduleExact(manager, followupTriggerAt, followupPi)
     }
 
+    actual fun scheduleNotificationOnly(seconds: Int, exerciseName: String) {
+        val manager = alarmManager ?: return
+        ensureRestTimerCompleteChannel(context)
+        val triggerAt = System.currentTimeMillis() + seconds * 1000L
+        val pi = createPendingIntent(
+            requestCode = REQUEST_CODE_NOTIFICATION_ONLY,
+            action = ACTION_COUNTDOWN_DONE,
+            exerciseName = exerciseName,
+            channelId = REST_TIMER_COMPLETE_CHANNEL_ID,
+        )
+        scheduleExact(manager, triggerAt, pi)
+    }
+
     actual fun cancel() {
         val manager = alarmManager ?: return
         cancelOne(manager, REQUEST_CODE_INITIAL, ACTION_REST_DONE)
         cancelOne(manager, REQUEST_CODE_FOLLOWUP, ACTION_REST_FOLLOWUP_DONE)
+        cancelOne(manager, REQUEST_CODE_NOTIFICATION_ONLY, ACTION_COUNTDOWN_DONE)
         // Stop the looping playback service if a custom alarm is currently sounding.
         // runCatching guards against background-start restrictions when called from a
         // non-foreground context (alarms cancelled while the app isn't visible).

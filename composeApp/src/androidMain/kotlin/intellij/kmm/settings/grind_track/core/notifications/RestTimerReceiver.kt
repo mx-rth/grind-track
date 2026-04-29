@@ -20,17 +20,19 @@ import org.koin.mp.KoinPlatformTools
 
 private const val NOTIFICATION_ID_INITIAL = 0x6711
 private const val NOTIFICATION_ID_FOLLOWUP = 0x6712
+private const val NOTIFICATION_ID_COUNTDOWN = 0x6713
 
 class RestTimerReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val isInitial = intent.action == ACTION_REST_DONE
         val isFollowup = intent.action == ACTION_REST_FOLLOWUP_DONE
-        if (!isInitial && !isFollowup) return
+        val isCountdown = intent.action == ACTION_COUNTDOWN_DONE
+        if (!isInitial && !isFollowup && !isCountdown) return
 
-        if (isInitial) ensureRestTimerCompleteChannel(context) else ensureRestTimerChannel(context)
+        if (isFollowup) ensureRestTimerChannel(context) else ensureRestTimerCompleteChannel(context)
 
         val exerciseName = intent.getStringExtra(EXTRA_EXERCISE_NAME).orEmpty()
-        val defaultChannelId = if (isInitial) REST_TIMER_COMPLETE_CHANNEL_ID else REST_TIMER_CHANNEL_ID
+        val defaultChannelId = if (isFollowup) REST_TIMER_CHANNEL_ID else REST_TIMER_COMPLETE_CHANNEL_ID
         val requestedChannelId = intent.getStringExtra(EXTRA_CHANNEL_ID) ?: defaultChannelId
         // Fall back to the default channel if the requested (custom) channel no longer
         // exists — without this the system silently drops the notification.
@@ -42,8 +44,14 @@ class RestTimerReceiver : BroadcastReceiver() {
         } else {
             requestedChannelId
         }
-        val title = "Rest complete"
-        val body = if (exerciseName.isNotBlank()) "Time for $exerciseName" else "Time for the next set"
+        val title = if (isCountdown) "Time's up" else "Rest complete"
+        val body = if (isCountdown) {
+            if (exerciseName.isNotBlank()) "$exerciseName complete" else "Countdown complete"
+        } else if (exerciseName.isNotBlank()) {
+            "Time for $exerciseName"
+        } else {
+            "Time for the next set"
+        }
 
         // Stage 2 with a custom alarm sound: delegate to the foreground service so the
         // sound plays in a continuous loop on USAGE_ALARM (channel-driven playback only
@@ -64,9 +72,13 @@ class RestTimerReceiver : BroadcastReceiver() {
             }
         }
 
-        val notificationId = if (isInitial) NOTIFICATION_ID_INITIAL else NOTIFICATION_ID_FOLLOWUP
-        val category = if (isInitial) NotificationCompat.CATEGORY_REMINDER else NotificationCompat.CATEGORY_ALARM
-        val priority = if (isInitial) NotificationCompat.PRIORITY_DEFAULT else NotificationCompat.PRIORITY_HIGH
+        val notificationId = when {
+            isFollowup -> NOTIFICATION_ID_FOLLOWUP
+            isCountdown -> NOTIFICATION_ID_COUNTDOWN
+            else -> NOTIFICATION_ID_INITIAL
+        }
+        val category = if (isFollowup) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_REMINDER
+        val priority = if (isFollowup) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT
 
         val launchPendingIntent = PendingIntent.getActivity(
             context,

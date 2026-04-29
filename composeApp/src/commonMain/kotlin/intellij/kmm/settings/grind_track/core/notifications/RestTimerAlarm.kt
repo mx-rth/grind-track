@@ -14,6 +14,14 @@ expect class RestTimerAlarm {
      */
     fun schedule(seconds: Int, exerciseName: String)
 
+    /**
+     * Schedule a single non-repeating notification after [seconds] using the system's
+     * default notification sound. Used by features (e.g. distance-exercise countdown)
+     * that want a gentle one-shot reminder regardless of the user's custom rest-timer
+     * sound choices.
+     */
+    fun scheduleNotificationOnly(seconds: Int, exerciseName: String)
+
     /** Cancel any pending alarm. Idempotent. */
     fun cancel()
 }

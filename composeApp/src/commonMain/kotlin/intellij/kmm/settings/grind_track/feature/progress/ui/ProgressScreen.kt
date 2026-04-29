@@ -69,7 +69,12 @@ import intellij.kmm.settings.grind_track.core.database.entity.Exercise
 import intellij.kmm.settings.grind_track.core.database.entity.ExerciseType
 import intellij.kmm.settings.grind_track.core.database.entity.SetEntry
 import intellij.kmm.settings.grind_track.core.database.entity.Side
+import intellij.kmm.settings.grind_track.core.designsystem.AccentBadge
+import intellij.kmm.settings.grind_track.core.designsystem.BrandColors
 import intellij.kmm.settings.grind_track.core.designsystem.EmptyState
+import intellij.kmm.settings.grind_track.core.designsystem.HeroCard
+import intellij.kmm.settings.grind_track.core.designsystem.SectionHeader
+import intellij.kmm.settings.grind_track.core.designsystem.StatTile
 import kotlin.math.roundToInt
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -150,9 +155,15 @@ fun ProgressScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("Progress") },
+                title = {
+                    Text(
+                        "Progress",
+                        style = MaterialTheme.typography.headlineMedium,
+                    )
+                },
                 actions = {
                     IconButton(onClick = { showAchievements = true }) {
                         Icon(
@@ -161,23 +172,34 @@ fun ProgressScreen(
                         )
                     }
                     if (!state.isLoading) {
-                        Row(
+                        androidx.compose.material3.Surface(
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                            color = androidx.compose.ui.graphics.Color(0xFFFFE0CC),
+                            contentColor = androidx.compose.ui.graphics.Color(0xFF8C2A00),
                             modifier = Modifier.padding(end = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
-                            Icon(
-                                painter = painterResource(Res.drawable.ic_flame),
-                                contentDescription = "Streak",
-                                tint = Color(0xFFFF6600),
-                            )
-                            Text(
-                                text = state.streak.toString(),
-                                style = MaterialTheme.typography.titleMedium,
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Icon(
+                                    painter = painterResource(Res.drawable.ic_flame),
+                                    contentDescription = "Streak",
+                                    tint = Color(0xFFFF6600),
+                                )
+                                Text(
+                                    text = state.streak.toString(),
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                            }
                         }
                     }
                 },
+                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.background,
+                ),
             )
         },
     ) { padding ->
@@ -333,7 +355,6 @@ private fun LoadedContent(
             selectedExerciseId = state.selectedExerciseId,
             onSelect = onSelectExercise,
         )
-        HorizontalDivider()
         if (state.history.isEmpty()) {
             EmptyState(
                 title = "No sets logged for this exercise",
@@ -360,14 +381,26 @@ private fun ExercisePicker(
     onSelect: (Long) -> Unit,
 ) {
     LazyRow(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(end = 8.dp),
     ) {
         items(exercises, key = { it.id }) { exercise ->
+            val selected = exercise.id == selectedExerciseId
             FilterChip(
-                selected = exercise.id == selectedExerciseId,
+                selected = selected,
                 onClick = { onSelect(exercise.id) },
-                label = { Text(exercise.name) },
+                label = {
+                    Text(
+                        exercise.name,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                },
+                shape = androidx.compose.foundation.shape.CircleShape,
+                colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                ),
             )
         }
     }
@@ -395,11 +428,56 @@ private fun HistoryList(
         if (count == 1) shortDate(date) else "${shortDate(date)} ($count)"
     }
 
+    val totalSessions = sessionGroups.size
+    val totalSets = history.size
+    val typeAccent = when (type) {
+        ExerciseType.STRENGTH -> BrandColors.Coral
+        ExerciseType.DISTANCE -> BrandColors.Cyan
+        ExerciseType.TIME -> BrandColors.Magenta
+    }
+    val typeLabel = when (type) {
+        ExerciseType.STRENGTH -> "Strength"
+        ExerciseType.DISTANCE -> "Distance"
+        ExerciseType.TIME -> "Time"
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        item(key = "stats") {
+            HeroCard(
+                color = typeAccent,
+                onColor = if (type == ExerciseType.STRENGTH) Color.White else BrandColors.InkNavy,
+            ) {
+                AccentBadge(
+                    text = typeLabel,
+                    container = if (type == ExerciseType.STRENGTH) Color.White
+                        else BrandColors.InkNavy,
+                    onContainer = typeAccent,
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    StatTile(
+                        label = "Sessions",
+                        value = totalSessions.toString(),
+                        modifier = Modifier.weight(1f),
+                        container = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.85f),
+                        onContainer = BrandColors.InkNavy,
+                    )
+                    StatTile(
+                        label = "Sets",
+                        value = totalSets.toString(),
+                        modifier = Modifier.weight(1f),
+                        container = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.85f),
+                        onContainer = BrandColors.InkNavy,
+                    )
+                }
+            }
+        }
         when (type) {
             ExerciseType.STRENGTH -> {
                 val weightBySession: List<Pair<String, List<Double>>> =
@@ -416,9 +494,15 @@ private fun HistoryList(
                     )
                 }
                 if (!hideWeightChart) {
+                    item(key = "weight_chart_section") {
+                        SectionHeader(text = "Weight progression", accent = typeAccent)
+                    }
                     item(key = "weight_chart") {
                         WeightProgressionChart(dataPoints = weightBySession)
                     }
+                }
+                item(key = "reps_chart_section") {
+                    SectionHeader(text = "Reps per session", accent = BrandColors.Electric)
                 }
                 item(key = "reps_chart") {
                     RepsBarChart(dataPoints = repsBySession, hasUnilateral = hasUnilateral)
@@ -429,6 +513,9 @@ private fun HistoryList(
                     sessionGroups.mapIndexed { i, (_, entries) ->
                         sessionLabels[i] to entries.mapNotNull { it.distanceMeters }
                     }
+                item(key = "distance_chart_section") {
+                    SectionHeader(text = "Distance per session", accent = typeAccent)
+                }
                 item(key = "distance_chart") {
                     DistanceProgressionChart(dataPoints = distanceBySession)
                 }
@@ -438,19 +525,39 @@ private fun HistoryList(
                     sessionGroups.mapIndexed { i, (_, entries) ->
                         sessionLabels[i] to entries.mapNotNull { it.durationSeconds }
                     }
+                item(key = "time_chart_section") {
+                    SectionHeader(text = "Time per session", accent = typeAccent)
+                }
                 item(key = "time_chart") {
                     TimeProgressionChart(dataPoints = durationBySession)
                 }
             }
         }
+        item(key = "history_section") {
+            SectionHeader(text = "History", accent = BrandColors.SunYellow)
+        }
         grouped.forEach { (date, entries) ->
             item(key = date.toString()) {
-                ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(
-                            text = formatDate(date),
-                            style = MaterialTheme.typography.titleMedium,
-                        )
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                ) {
+                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = formatDate(date),
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.weight(1f),
+                            )
+                            AccentBadge(
+                                text = "${entries.size} sets",
+                                container = typeAccent,
+                                onContainer = if (type == ExerciseType.STRENGTH) Color.White else BrandColors.InkNavy,
+                            )
+                        }
                         entries.sortedBy { it.completedAt }.forEachIndexed { idx, entry ->
                             val displayIndex = if (entry.side != null) entry.setIndex else idx + 1
                             SetEntryRow(index = displayIndex, entry = entry, type = type)

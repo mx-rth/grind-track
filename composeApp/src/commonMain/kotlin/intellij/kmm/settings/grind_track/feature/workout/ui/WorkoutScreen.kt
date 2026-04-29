@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -32,7 +34,12 @@ import intellij.kmm.settings.grind_track.core.data.RoutineExerciseWithExercise
 import intellij.kmm.settings.grind_track.core.database.entity.ExerciseType
 import intellij.kmm.settings.grind_track.core.database.entity.Routine
 import intellij.kmm.settings.grind_track.core.database.entity.Side
+import intellij.kmm.settings.grind_track.core.designsystem.AccentBadge
+import intellij.kmm.settings.grind_track.core.designsystem.BrandColors
 import intellij.kmm.settings.grind_track.core.designsystem.EmptyState
+import intellij.kmm.settings.grind_track.core.designsystem.HeroCard
+import intellij.kmm.settings.grind_track.core.designsystem.SectionHeader
+import intellij.kmm.settings.grind_track.core.designsystem.StripedCard
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -43,14 +50,16 @@ fun WorkoutScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        when (val current = state) {
+                        text = when (val current = state) {
                             is WorkoutUiState.InSession -> current.routine.name.ifBlank { "Workout" }
                             else -> "Workout"
-                        }
+                        },
+                        style = MaterialTheme.typography.headlineMedium,
                     )
                 },
                 actions = {
@@ -58,6 +67,10 @@ fun WorkoutScreen(
                         TextButton(onClick = viewModel::finishSession) { Text("Finish") }
                     }
                 },
+                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.background,
+                ),
             )
         },
     ) { padding ->
@@ -70,11 +83,15 @@ fun WorkoutScreen(
                 )
                 is WorkoutUiState.InSession -> InSessionContent(
                     state = current,
-                    onMarkSetComplete = viewModel::markSetComplete,
+                    onMarkSetComplete = { viewModel.markSetComplete() },
                     onUpdateRestForm = viewModel::updateRestForm,
                     onLogSet = viewModel::logSet,
                     onContinueToNext = viewModel::continueToNext,
                     onFinish = viewModel::finishSession,
+                    onStartStopwatch = viewModel::startStopwatch,
+                    onStopStopwatch = viewModel::stopStopwatch,
+                    onStartCountdown = viewModel::startCountdown,
+                    onCancelCountdown = viewModel::cancelCountdown,
                 )
             }
         }
@@ -93,36 +110,78 @@ private fun RoutinePicker(
         )
         return
     }
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            "Pick a routine to start",
-            style = MaterialTheme.typography.titleMedium,
-        )
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(routines, key = { it.id }) { routine ->
-                RoutinePickerRow(routine = routine, onClick = { onPick(routine.id) })
+        item(key = "hero") {
+            HeroCard(
+                color = BrandColors.Coral,
+                onColor = androidx.compose.ui.graphics.Color.White,
+            ) {
+                AccentBadge(
+                    text = "Up next",
+                    container = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.2f),
+                    onContainer = androidx.compose.ui.graphics.Color.White,
+                )
+                Text(
+                    text = "Pick a routine,\npress play.",
+                    style = MaterialTheme.typography.headlineLarge,
+                )
+                Text(
+                    text = "${routines.size} ready to go",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+        item(key = "section") {
+            SectionHeader(text = "Choose a routine")
+        }
+        items(routines, key = { it.id }) { routine ->
+            RoutinePickerRow(routine = routine, onClick = { onPick(routine.id) })
+        }
+    }
+}
+
+@Composable
+private fun RoutinePickerRow(routine: Routine, onClick: () -> Unit) {
+    val accent = pickerAccentForRoutine(routine.id)
+    StripedCard(accent = accent, onClick = onClick) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.material3.Surface(
+                shape = androidx.compose.foundation.shape.CircleShape,
+                color = accent,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.padding(end = 12.dp),
+            ) {
+                Box(modifier = Modifier.padding(10.dp)) {
+                    androidx.compose.material3.Icon(
+                        Icons.Filled.PlayArrow,
+                        contentDescription = null,
+                        tint = androidx.compose.ui.graphics.Color.White,
+                    )
+                }
+            }
+            Box(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = routine.name.ifBlank { "Untitled routine" },
+                    style = MaterialTheme.typography.titleMedium,
+                )
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun RoutinePickerRow(routine: Routine, onClick: () -> Unit) {
-    ElevatedCard(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = routine.name.ifBlank { "Untitled routine" },
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(16.dp),
-        )
-    }
+private fun pickerAccentForRoutine(id: Long): androidx.compose.ui.graphics.Color {
+    val palette = listOf(
+        BrandColors.Coral,
+        BrandColors.Electric,
+        BrandColors.SunYellow,
+        BrandColors.MintFresh,
+    )
+    val idx = ((id % palette.size).toInt() + palette.size) % palette.size
+    return palette[idx]
 }
 
 @Composable
@@ -133,6 +192,10 @@ private fun InSessionContent(
     onLogSet: () -> Unit,
     onContinueToNext: () -> Unit,
     onFinish: () -> Unit,
+    onStartStopwatch: () -> Unit,
+    onStopStopwatch: () -> Unit,
+    onStartCountdown: () -> Unit,
+    onCancelCountdown: () -> Unit,
 ) {
     val current = state.currentExercise
     if (current == null) {
@@ -145,43 +208,56 @@ private fun InSessionContent(
             onContinue = onContinueToNext,
             onFinish = onFinish,
         )
-        Phase.Working,
+        is Phase.Working,
         is Phase.Resting -> Column(
-            modifier = Modifier.fillMaxSize().padding(24.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text(
-                text = "Exercise ${state.currentExerciseIndex + 1} of ${state.exercises.size}",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = current.exercise.name,
-                style = MaterialTheme.typography.headlineMedium,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                text = "Set ${state.currentSetIndex} of ${current.routineExercise.targetSets}",
-                style = MaterialTheme.typography.titleLarge,
-            )
-            val side = state.currentSide
-            if (side != null) {
+            HeroCard(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                onColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AccentBadge(
+                        text = "Set ${state.currentSetIndex}/${current.routineExercise.targetSets}",
+                        container = MaterialTheme.colorScheme.onPrimaryContainer,
+                        onContainer = MaterialTheme.colorScheme.primaryContainer,
+                    )
+                    Box(modifier = Modifier.weight(1f))
+                    AccentBadge(
+                        text = "Exercise ${state.currentExerciseIndex + 1}/${state.exercises.size}",
+                        container = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.12f),
+                        onContainer = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
                 Text(
-                    text = "${sideLabelText(side)} side",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.tertiary,
+                    text = current.exercise.name,
+                    style = MaterialTheme.typography.headlineLarge,
                 )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AccentBadge(
+                        text = targetLabel(current),
+                        container = BrandColors.Coral,
+                        onContainer = androidx.compose.ui.graphics.Color.White,
+                    )
+                    val side = state.currentSide
+                    if (side != null) {
+                        AccentBadge(
+                            text = "${sideLabelText(side)} side",
+                            container = BrandColors.Electric,
+                            onContainer = androidx.compose.ui.graphics.Color.White,
+                        )
+                    }
+                }
             }
-            Text(
-                text = targetLabel(current),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
 
             Box(modifier = Modifier.weight(1f)) {
                 when (phase) {
-                    Phase.Working -> {
+                    is Phase.Working -> {
                         val isUnilateralFirstSide = current.exercise.unilateral && state.currentSideIndex == 0
                         val restSeconds = if (isUnilateralFirstSide) {
                             current.effectiveRestAfterFirstSideSeconds
@@ -193,11 +269,41 @@ private fun InSessionContent(
                         } else {
                             "Rest will be ${restSeconds}s"
                         }
-                        WorkingControls(
-                            restLabel = restLabel,
-                            onMarkSetComplete = onMarkSetComplete,
-                            onFinish = onFinish,
-                        )
+                        when (current.exercise.type) {
+                            ExerciseType.TIME -> StopwatchControls(
+                                phase = phase,
+                                restLabel = restLabel,
+                                onStart = onStartStopwatch,
+                                onStop = onStopStopwatch,
+                                onLogManually = onMarkSetComplete,
+                                onFinish = onFinish,
+                            )
+                            ExerciseType.DISTANCE -> {
+                                val target = current.routineExercise.targetDurationSeconds
+                                if (target != null && target > 0.0) {
+                                    CountdownControls(
+                                        phase = phase,
+                                        targetSeconds = target,
+                                        restLabel = restLabel,
+                                        onStart = onStartCountdown,
+                                        onCancel = onCancelCountdown,
+                                        onMarkSetComplete = onMarkSetComplete,
+                                        onFinish = onFinish,
+                                    )
+                                } else {
+                                    WorkingControls(
+                                        restLabel = restLabel,
+                                        onMarkSetComplete = onMarkSetComplete,
+                                        onFinish = onFinish,
+                                    )
+                                }
+                            }
+                            ExerciseType.STRENGTH -> WorkingControls(
+                                restLabel = restLabel,
+                                onMarkSetComplete = onMarkSetComplete,
+                                onFinish = onFinish,
+                            )
+                        }
                     }
                     is Phase.Resting -> RestingControls(
                         phase = phase,
@@ -264,6 +370,135 @@ private fun RestingBeforeNextExerciseContent(
         OutlinedButton(
             onClick = onFinish,
             modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Abandon workout")
+        }
+    }
+}
+
+@Composable
+private fun CountdownControls(
+    phase: Phase.Working,
+    targetSeconds: Double,
+    restLabel: String,
+    onStart: () -> Unit,
+    onCancel: () -> Unit,
+    onMarkSetComplete: () -> Unit,
+    onFinish: () -> Unit,
+) {
+    val remaining = phase.countdownRemaining
+    val running = remaining != null
+    val timeUp = remaining != null && remaining <= 0.0
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Bottom,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = formatStopwatch(remaining ?: targetSeconds),
+            style = MaterialTheme.typography.displayMedium,
+            color = when {
+                timeUp -> MaterialTheme.colorScheme.tertiary
+                running -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        if (timeUp) {
+            Text(
+                text = "Time's up — log your distance",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.tertiary,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+            )
+        } else {
+            Text(
+                text = restLabel,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+            )
+        }
+        Button(
+            onClick = onMarkSetComplete,
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+        ) {
+            Text("Mark set complete")
+        }
+        if (running) {
+            TextButton(
+                onClick = onCancel,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            ) {
+                Text("Cancel countdown")
+            }
+        } else {
+            TextButton(
+                onClick = onStart,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            ) {
+                Text("Start countdown")
+            }
+        }
+        OutlinedButton(
+            onClick = onFinish,
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        ) {
+            Text("Abandon workout")
+        }
+    }
+}
+
+@Composable
+private fun StopwatchControls(
+    phase: Phase.Working,
+    restLabel: String,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
+    onLogManually: () -> Unit,
+    onFinish: () -> Unit,
+) {
+    val running = phase.stopwatchElapsed != null
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Bottom,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = formatStopwatch(phase.stopwatchElapsed ?: 0.0),
+            style = MaterialTheme.typography.displayMedium,
+            color = if (running)
+                MaterialTheme.colorScheme.primary
+            else
+                MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        Text(
+            text = restLabel,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center,
+        )
+        Button(
+            onClick = if (running) onStop else onStart,
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+        ) {
+            Text(if (running) "Stop & log" else "Start stopwatch")
+        }
+        if (!running) {
+            TextButton(
+                onClick = onLogManually,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            ) {
+                Text("Enter time manually")
+            }
+        }
+        OutlinedButton(
+            onClick = onFinish,
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         ) {
             Text("Abandon workout")
         }
