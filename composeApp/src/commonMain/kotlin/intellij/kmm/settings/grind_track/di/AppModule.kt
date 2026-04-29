@@ -10,6 +10,7 @@ import intellij.kmm.settings.grind_track.core.database.DatabaseFactory
 import intellij.kmm.settings.grind_track.core.database.GymTrackDatabase
 import intellij.kmm.settings.grind_track.core.notifications.RoutineNotificationsCoordinator
 import intellij.kmm.settings.grind_track.app.CelebrationViewModel
+import intellij.kmm.settings.grind_track.core.preferences.MascotPreference
 import intellij.kmm.settings.grind_track.feature.progress.ui.ProgressViewModel
 import intellij.kmm.settings.grind_track.feature.routines.ui.RoutineEditorViewModel
 import intellij.kmm.settings.grind_track.feature.routines.ui.RoutinesViewModel
@@ -49,6 +50,7 @@ val appModule: Module = module {
     single { WorkoutRepository(get(), get()) }
     single { ProgressRepository(get(), get(), get()) }
     single { SeedDataManager(get(), get(), get(), get(), get()) }
+    single { MascotPreference(get()) }
     single {
         RoutineNotificationsCoordinator(
             repository = get(),
@@ -66,6 +68,7 @@ val appModule: Module = module {
         SettingsViewModel(
             notificationSoundManager = get(named(CUSTOM_SOUND_NOTIFICATION)),
             alarmSoundManager = get(named(CUSTOM_SOUND_ALARM)),
+            mascotPreference = get(),
         )
     }
 }

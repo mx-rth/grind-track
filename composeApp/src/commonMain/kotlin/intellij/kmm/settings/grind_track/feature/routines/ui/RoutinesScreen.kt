@@ -2,6 +2,7 @@ package intellij.kmm.settings.grind_track.feature.routines.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -37,6 +38,8 @@ import intellij.kmm.settings.grind_track.core.designsystem.AccentBadge
 import intellij.kmm.settings.grind_track.core.designsystem.BrandColors
 import intellij.kmm.settings.grind_track.core.designsystem.EmptyState
 import intellij.kmm.settings.grind_track.core.designsystem.HeroCard
+import intellij.kmm.settings.grind_track.core.designsystem.Mascot
+import intellij.kmm.settings.grind_track.core.designsystem.MascotPose
 import intellij.kmm.settings.grind_track.core.designsystem.SectionHeader
 import intellij.kmm.settings.grind_track.core.designsystem.StripedCard
 import org.koin.compose.viewmodel.koinViewModel
@@ -103,19 +106,34 @@ fun RoutinesScreen(
                             color = MaterialTheme.colorScheme.primaryContainer,
                             onColor = MaterialTheme.colorScheme.onPrimaryContainer,
                         ) {
-                            AccentBadge(
-                                text = "Today",
-                                container = MaterialTheme.colorScheme.onPrimaryContainer,
-                                onContainer = MaterialTheme.colorScheme.primaryContainer,
-                            )
-                            Text(
-                                text = "Let's crush\nyour next set.",
-                                style = MaterialTheme.typography.headlineLarge,
-                            )
-                            Text(
-                                text = "${state.routines.size} routine${if (state.routines.size == 1) "" else "s"} ready to go",
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    AccentBadge(
+                                        text = "Today",
+                                        container = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        onContainer = MaterialTheme.colorScheme.primaryContainer,
+                                    )
+                                    Text(
+                                        text = "Let's crush\nyour next set.",
+                                        style = MaterialTheme.typography.headlineLarge,
+                                    )
+                                    Text(
+                                        text = "${state.routines.size} routine${if (state.routines.size == 1) "" else "s"} ready to go",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                }
+                                Mascot(
+                                    pose = MascotPose.LetsGo,
+                                    size = 180.dp,
+                                    modifier = Modifier.align(Alignment.CenterVertically),
+                                )
+                            }
                         }
                     }
                     item(key = "section") {

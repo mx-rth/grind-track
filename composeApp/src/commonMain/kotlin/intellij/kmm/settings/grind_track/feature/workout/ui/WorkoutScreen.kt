@@ -38,6 +38,8 @@ import intellij.kmm.settings.grind_track.core.designsystem.AccentBadge
 import intellij.kmm.settings.grind_track.core.designsystem.BrandColors
 import intellij.kmm.settings.grind_track.core.designsystem.EmptyState
 import intellij.kmm.settings.grind_track.core.designsystem.HeroCard
+import intellij.kmm.settings.grind_track.core.designsystem.Mascot
+import intellij.kmm.settings.grind_track.core.designsystem.MascotPose
 import intellij.kmm.settings.grind_track.core.designsystem.SectionHeader
 import intellij.kmm.settings.grind_track.core.designsystem.StripedCard
 import org.koin.compose.viewmodel.koinViewModel
@@ -120,19 +122,34 @@ private fun RoutinePicker(
                 color = BrandColors.Coral,
                 onColor = androidx.compose.ui.graphics.Color.White,
             ) {
-                AccentBadge(
-                    text = "Up next",
-                    container = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.2f),
-                    onContainer = androidx.compose.ui.graphics.Color.White,
-                )
-                Text(
-                    text = "Pick a routine,\npress play.",
-                    style = MaterialTheme.typography.headlineLarge,
-                )
-                Text(
-                    text = "${routines.size} ready to go",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        AccentBadge(
+                            text = "Up next",
+                            container = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.2f),
+                            onContainer = androidx.compose.ui.graphics.Color.White,
+                        )
+                        Text(
+                            text = "Pick a routine,\npress play.",
+                            style = MaterialTheme.typography.headlineLarge,
+                        )
+                        Text(
+                            text = "${routines.size} ready to go",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    Mascot(
+                        pose = MascotPose.ReadyToTrain,
+                        size = 180.dp,
+                        modifier = Modifier.align(Alignment.CenterVertically),
+                    )
+                }
             }
         }
         item(key = "section") {
@@ -218,40 +235,54 @@ private fun InSessionContent(
                 color = MaterialTheme.colorScheme.primaryContainer,
                 onColor = MaterialTheme.colorScheme.onPrimaryContainer,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AccentBadge(
-                        text = "Set ${state.currentSetIndex}/${current.routineExercise.targetSets}",
-                        container = MaterialTheme.colorScheme.onPrimaryContainer,
-                        onContainer = MaterialTheme.colorScheme.primaryContainer,
-                    )
-                    Box(modifier = Modifier.weight(1f))
-                    AccentBadge(
-                        text = "Exercise ${state.currentExerciseIndex + 1}/${state.exercises.size}",
-                        container = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.12f),
-                        onContainer = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                }
-                Text(
-                    text = current.exercise.name,
-                    style = MaterialTheme.typography.headlineLarge,
-                )
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    AccentBadge(
-                        text = targetLabel(current),
-                        container = BrandColors.Coral,
-                        onContainer = androidx.compose.ui.graphics.Color.White,
-                    )
-                    val side = state.currentSide
-                    if (side != null) {
-                        AccentBadge(
-                            text = "${sideLabelText(side)} side",
-                            container = BrandColors.Electric,
-                            onContainer = androidx.compose.ui.graphics.Color.White,
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            AccentBadge(
+                                text = "Set ${state.currentSetIndex}/${current.routineExercise.targetSets}",
+                                container = MaterialTheme.colorScheme.onPrimaryContainer,
+                                onContainer = MaterialTheme.colorScheme.primaryContainer,
+                            )
+                            Box(modifier = Modifier.weight(1f))
+                            AccentBadge(
+                                text = "Exercise ${state.currentExerciseIndex + 1}/${state.exercises.size}",
+                                container = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.12f),
+                                onContainer = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
+                        Text(
+                            text = current.exercise.name,
+                            style = MaterialTheme.typography.headlineLarge,
                         )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            AccentBadge(
+                                text = targetLabel(current),
+                                container = BrandColors.Coral,
+                                onContainer = androidx.compose.ui.graphics.Color.White,
+                            )
+                            val side = state.currentSide
+                            if (side != null) {
+                                AccentBadge(
+                                    text = "${sideLabelText(side)} side",
+                                    container = BrandColors.Electric,
+                                    onContainer = androidx.compose.ui.graphics.Color.White,
+                                )
+                            }
+                        }
                     }
+                    Mascot(
+                        pose = if (phase is Phase.Resting) MascotPose.ThumbsUp else MascotPose.HandsOnHips,
+                        size = 130.dp,
+                    )
                 }
             }
 
@@ -360,7 +391,12 @@ private fun RestingBeforeNextExerciseContent(
                 MaterialTheme.colorScheme.onSurface,
         )
 
-        Box(modifier = Modifier.weight(1f))
+        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            Mascot(
+                pose = MascotPose.Clapping,
+                size = 220.dp,
+            )
+        }
         Button(
             onClick = onContinue,
             modifier = Modifier.fillMaxWidth(),
@@ -660,10 +696,15 @@ private fun EmptyExerciseList(onFinish: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
+        Mascot(
+            pose = MascotPose.Standing,
+            size = 180.dp,
+        )
         Text(
             "This routine has no exercises yet.",
             style = MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 16.dp),
         )
         Box(modifier = Modifier.padding(top = 16.dp)) {
             Button(onClick = onFinish) { Text("End session") }

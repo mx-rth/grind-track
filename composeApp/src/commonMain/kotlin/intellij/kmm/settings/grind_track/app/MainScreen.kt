@@ -27,11 +27,14 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -42,10 +45,24 @@ import intellij.kmm.settings.grind_track.feature.progress.ui.CelebrationEvent
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.viewmodel.koinViewModel
+import intellij.kmm.settings.grind_track.core.designsystem.LocalMascotVariant
+import intellij.kmm.settings.grind_track.core.preferences.MascotPreference
+import org.koin.compose.koinInject
 
 @Composable
 fun MainScreen() {
     val navController = rememberNavController()
+    val mascotPreference: MascotPreference = koinInject()
+    val mascotVariant by mascotPreference.variant.collectAsStateWithLifecycle()
+    CompositionLocalProvider(LocalMascotVariant provides mascotVariant) {
+        MainScreenScaffold(navController = navController)
+    }
+}
+
+@Composable
+private fun MainScreenScaffold(
+    navController: androidx.navigation.NavHostController,
+) {
     val celebrationVm: CelebrationViewModel = koinViewModel()
     val currentEvent by celebrationVm.currentEvent.collectAsStateWithLifecycle()
 

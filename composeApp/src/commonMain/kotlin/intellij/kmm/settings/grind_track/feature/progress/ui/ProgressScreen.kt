@@ -67,6 +67,8 @@ import intellij.kmm.settings.grind_track.core.designsystem.AccentBadge
 import intellij.kmm.settings.grind_track.core.designsystem.BrandColors
 import intellij.kmm.settings.grind_track.core.designsystem.EmptyState
 import intellij.kmm.settings.grind_track.core.designsystem.HeroCard
+import intellij.kmm.settings.grind_track.core.designsystem.Mascot
+import intellij.kmm.settings.grind_track.core.designsystem.MascotPose
 import intellij.kmm.settings.grind_track.core.designsystem.SectionHeader
 import intellij.kmm.settings.grind_track.core.designsystem.StatTile
 import kotlin.math.roundToInt
@@ -416,29 +418,44 @@ private fun HistoryList(
                 color = typeAccent,
                 onColor = if (type == ExerciseType.STRENGTH) Color.White else BrandColors.InkNavy,
             ) {
-                AccentBadge(
-                    text = typeLabel,
-                    container = if (type == ExerciseType.STRENGTH) Color.White
-                        else BrandColors.InkNavy,
-                    onContainer = typeAccent,
-                )
                 Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    StatTile(
-                        label = "Sessions",
-                        value = totalSessions.toString(),
+                    Column(
                         modifier = Modifier.weight(1f),
-                        container = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.85f),
-                        onContainer = BrandColors.InkNavy,
-                    )
-                    StatTile(
-                        label = "Sets",
-                        value = totalSets.toString(),
-                        modifier = Modifier.weight(1f),
-                        container = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.85f),
-                        onContainer = BrandColors.InkNavy,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        AccentBadge(
+                            text = typeLabel,
+                            container = if (type == ExerciseType.STRENGTH) Color.White
+                                else BrandColors.InkNavy,
+                            onContainer = typeAccent,
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            StatTile(
+                                label = "Sessions",
+                                value = totalSessions.toString(),
+                                modifier = Modifier.weight(1.3f),
+                                container = Color.White.copy(alpha = 0.85f),
+                                onContainer = BrandColors.InkNavy,
+                            )
+                            StatTile(
+                                label = "Sets",
+                                value = totalSets.toString(),
+                                modifier = Modifier.weight(1f),
+                                container = Color.White.copy(alpha = 0.85f),
+                                onContainer = BrandColors.InkNavy,
+                            )
+                        }
+                    }
+                    Mascot(
+                        pose = MascotPose.CheckProgress,
+                        size = 160.dp,
                     )
                 }
             }

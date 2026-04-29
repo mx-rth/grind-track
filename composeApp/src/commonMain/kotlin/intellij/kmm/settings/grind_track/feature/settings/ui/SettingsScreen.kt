@@ -1,11 +1,14 @@
 package intellij.kmm.settings.grind_track.feature.settings.ui
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -20,6 +23,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -27,10 +31,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import intellij.kmm.settings.grind_track.app.ThemeState
+import intellij.kmm.settings.grind_track.core.designsystem.BrandColors
+import intellij.kmm.settings.grind_track.core.designsystem.MascotPose
+import intellij.kmm.settings.grind_track.core.designsystem.MascotVariant
+import intellij.kmm.settings.grind_track.core.designsystem.mascotResource
 import intellij.kmm.settings.grind_track.core.notifications.CustomSound
+import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -66,6 +77,10 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
+            MascotPicker(
+                selected = state.mascotVariant,
+                onSelect = viewModel::selectMascot,
+            )
             DarkModeSection(isDark = isDarkMode, onToggle = ThemeState::set)
             HorizontalDivider()
             SoundSection(
@@ -112,6 +127,78 @@ private fun DarkModeSection(isDark: Boolean, onToggle: (Boolean) -> Unit) {
             )
         }
         Switch(checked = isDark, onCheckedChange = onToggle)
+    }
+}
+
+@Composable
+private fun MascotPicker(
+    selected: MascotVariant,
+    onSelect: (MascotVariant) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = "Workout buddy",
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Text(
+            text = "Pick the mascot that cheers you on across the app.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            MascotVariant.entries.forEach { variant ->
+                MascotOption(
+                    variant = variant,
+                    selected = variant == selected,
+                    onClick = { onSelect(variant) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MascotOption(
+    variant: MascotVariant,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val accent = if (variant == MascotVariant.Female) BrandColors.Cyan else BrandColors.SunYellow
+    val container = if (selected) accent else MaterialTheme.colorScheme.surface
+    val onContainer = if (selected) BrandColors.InkNavy else MaterialTheme.colorScheme.onSurface
+    Surface(
+        onClick = onClick,
+        modifier = modifier,
+        shape = MaterialTheme.shapes.large,
+        color = container,
+        contentColor = onContainer,
+        tonalElevation = if (selected) 0.dp else 1.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Box(modifier = Modifier.fillMaxWidth().height(160.dp)) {
+                Image(
+                    painter = painterResource(mascotResource(variant, MascotPose.Standing)),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxWidth().height(160.dp),
+                )
+            }
+            Text(
+                text = if (variant == MascotVariant.Female) "Cy" else "Mo",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = if (selected) "Active" else "Tap to choose",
+                style = MaterialTheme.typography.labelSmall,
+                color = onContainer.copy(alpha = 0.7f),
+            )
+        }
     }
 }
 
