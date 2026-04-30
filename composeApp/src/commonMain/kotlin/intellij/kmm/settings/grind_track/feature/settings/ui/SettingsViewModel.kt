@@ -2,6 +2,7 @@ package intellij.kmm.settings.grind_track.feature.settings.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import intellij.kmm.settings.grind_track.core.data.SeedDataManager
 import intellij.kmm.settings.grind_track.core.designsystem.MascotVariant
 import intellij.kmm.settings.grind_track.core.notifications.CustomSound
 import intellij.kmm.settings.grind_track.core.notifications.CustomSoundManager
@@ -22,6 +23,7 @@ class SettingsViewModel(
     private val notificationSoundManager: CustomSoundManager,
     private val alarmSoundManager: CustomSoundManager,
     private val mascotPreference: MascotPreference,
+    private val seedDataManager: SeedDataManager,
 ) : ViewModel() {
     val state: StateFlow<SettingsUiState> = combine(
         notificationSoundManager.updates,
@@ -65,5 +67,11 @@ class SettingsViewModel(
 
     fun selectMascot(variant: MascotVariant) {
         mascotPreference.set(variant)
+    }
+
+    fun seedMockData() {
+        viewModelScope.launch {
+            seedDataManager.seedIfEmpty()
+        }
     }
 }

@@ -107,6 +107,27 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            HorizontalDivider()
+            DeveloperSection(onAddMockData = viewModel::seedMockData)
+        }
+    }
+}
+
+@Composable
+private fun DeveloperSection(onAddMockData: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = "Developer",
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Text(
+            text = "Seed the database with sample routines and 6 weeks of past " +
+                "workouts. No-op if data already exists.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedButton(onClick = onAddMockData, modifier = Modifier.fillMaxWidth()) {
+            Text("Add mock data")
         }
     }
 }

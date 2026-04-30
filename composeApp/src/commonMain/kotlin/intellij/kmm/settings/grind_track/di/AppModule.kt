@@ -18,7 +18,6 @@ import intellij.kmm.settings.grind_track.feature.settings.ui.SettingsViewModel
 import intellij.kmm.settings.grind_track.feature.workout.ui.WorkoutViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
@@ -69,6 +68,7 @@ val appModule: Module = module {
             notificationSoundManager = get(named(CUSTOM_SOUND_NOTIFICATION)),
             alarmSoundManager = get(named(CUSTOM_SOUND_ALARM)),
             mascotPreference = get(),
+            seedDataManager = get(),
         )
     }
 }
@@ -80,9 +80,6 @@ fun initKoin(config: KoinAppDeclaration? = null) {
     startKoin {
         config?.invoke(this)
         modules(appModule, platformModule())
-    }
-    CoroutineScope(Dispatchers.Default).launch {
-        KoinPlatformTools.defaultContext().get().get<SeedDataManager>().seedIfEmpty()
     }
     // Eagerly resolve so the coordinator starts collecting routines immediately.
     KoinPlatformTools.defaultContext().get().get<RoutineNotificationsCoordinator>()
