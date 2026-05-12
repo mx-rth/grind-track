@@ -40,9 +40,13 @@ actual class CustomSoundManager(
     private val keyDisplayName = "${kind.settingsPrefix}display_name"
     private val keyFilename = "${kind.settingsPrefix}filename"
     private val keyGeneration = "${kind.settingsPrefix}generation"
+    private val keyGainDb = "${kind.settingsPrefix}gain_db"
 
     private val _updates = MutableStateFlow(loadCurrent())
     actual val updates: StateFlow<CustomSound?> = _updates.asStateFlow()
+
+    private val _gainDb = MutableStateFlow(settings.getFloat(keyGainDb, 0f))
+    actual val gainDb: StateFlow<Float> = _gainDb.asStateFlow()
 
     actual fun current(): CustomSound? = _updates.value
 
@@ -51,11 +55,17 @@ actual class CustomSoundManager(
         val previousFilename = settings.getString(keyFilename)
         val newGeneration = previousGeneration + 1
         val newFilename = "${kind.filenamePrefix}$newGeneration.wav"
+        val newOrigFilename = origFilenameOf(newFilename)
 
         withContext(Dispatchers.IO) {
             val dir = soundsDir().also { it.mkdirs() }
-            File(dir, newFilename).writeBytes(bytes)
-            previousFilename?.let { File(dir, it).delete() }
+            File(dir, newOrigFilename).writeBytes(bytes)
+            val processed = WavAmplifier.amplify(bytes, 0f)
+            File(dir, newFilename).writeBytes(processed)
+            previousFilename?.let {
+                File(dir, it).delete()
+                File(dir, origFilenameOf(it)).delete()
+            }
         }
 
         val uri = FileProvider.getUriForFile(
@@ -69,21 +79,66 @@ actual class CustomSoundManager(
         settings.putString(keyDisplayName, displayName)
         settings.putString(keyFilename, newFilename)
         settings.putInt(keyGeneration, newGeneration)
+        settings.putFloat(keyGainDb, 0f)
 
         _updates.value = CustomSound(displayName, newFilename)
+        _gainDb.value = 0f
+    }
+
+    actual suspend fun setGainDb(db: Float) {
+        val clamped = db.coerceIn(0f, 12f)
+        val current = _updates.value ?: return
+        val previousGeneration = settings.getInt(keyGeneration, 0)
+        val previousFilename = current.internalFilename
+        val previousOrigFilename = origFilenameOf(previousFilename)
+        val newGeneration = previousGeneration + 1
+        val newFilename = "${kind.filenamePrefix}$newGeneration.wav"
+        val newOrigFilename = origFilenameOf(newFilename)
+
+        withContext(Dispatchers.IO) {
+            val dir = soundsDir().also { it.mkdirs() }
+            val origFile = File(dir, previousOrigFilename)
+            if (!origFile.exists()) return@withContext
+            val origBytes = origFile.readBytes()
+            File(dir, newOrigFilename).writeBytes(origBytes)
+            val processed = WavAmplifier.amplify(origBytes, clamped)
+            File(dir, newFilename).writeBytes(processed)
+            File(dir, previousFilename).delete()
+            origFile.delete()
+        }
+
+        val uri = FileProvider.getUriForFile(
+            context,
+            FILE_PROVIDER_AUTHORITY,
+            File(soundsDir(), newFilename),
+        )
+        ensureCustomChannel(context, kind, uri, newGeneration)
+        if (previousGeneration > 0) deleteCustomChannel(context, kind, previousGeneration)
+
+        settings.putString(keyFilename, newFilename)
+        settings.putInt(keyGeneration, newGeneration)
+        settings.putFloat(keyGainDb, clamped)
+
+        _updates.value = CustomSound(current.displayName, newFilename)
+        _gainDb.value = clamped
     }
 
     actual fun uninstall() {
         val filename = settings.getString(keyFilename)
         val generation = settings.getInt(keyGeneration, 0)
-        if (filename != null) File(soundsDir(), filename).delete()
+        if (filename != null) {
+            File(soundsDir(), filename).delete()
+            File(soundsDir(), origFilenameOf(filename)).delete()
+        }
         if (generation > 0) deleteCustomChannel(context, kind, generation)
         settings.putString(keyDisplayName, null)
         settings.putString(keyFilename, null)
+        settings.putFloat(keyGainDb, 0f)
         // Generation counter is intentionally NOT reset, so a future install gets a fresh
         // channel ID (Android caches deleted channel IDs for a window).
 
         _updates.value = null
+        _gainDb.value = 0f
     }
 
     /**
@@ -135,6 +190,9 @@ actual class CustomSoundManager(
     }
 
     private fun soundsDir(): File = File(context.filesDir, SOUNDS_DIR)
+
+    private fun origFilenameOf(processedFilename: String): String =
+        processedFilename.removeSuffix(".wav") + "_orig.wav"
 
     private fun loadCurrent(): CustomSound? {
         val displayName = settings.getString(keyDisplayName)

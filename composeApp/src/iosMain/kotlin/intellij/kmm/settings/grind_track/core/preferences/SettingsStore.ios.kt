@@ -17,4 +17,11 @@ actual class SettingsStore {
     actual fun putInt(key: String, value: Int) {
         defaults.setInteger(value.toLong(), key)
     }
+
+    actual fun getFloat(key: String, default: Float): Float =
+        if (defaults.objectForKey(key) == null) default else defaults.floatForKey(key)
+
+    actual fun putFloat(key: String, value: Float) {
+        defaults.setFloat(value, key)
+    }
 }

@@ -16,7 +16,9 @@ enum class CustomSoundKind { Notification, Alarm }
 
 expect class CustomSoundManager {
     val updates: StateFlow<CustomSound?>
+    val gainDb: StateFlow<Float>
     fun current(): CustomSound?
     suspend fun install(displayName: String, bytes: ByteArray)
+    suspend fun setGainDb(db: Float)
     fun uninstall()
 }

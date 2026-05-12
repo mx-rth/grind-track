@@ -23,4 +23,10 @@ actual class SettingsStore(context: Context) {
     actual fun putInt(key: String, value: Int) {
         prefs.edit { putInt(key, value) }
     }
+
+    actual fun getFloat(key: String, default: Float): Float = prefs.getFloat(key, default)
+
+    actual fun putFloat(key: String, value: Float) {
+        prefs.edit { putFloat(key, value) }
+    }
 }

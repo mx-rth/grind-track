@@ -23,12 +23,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import kotlin.math.roundToInt
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -90,6 +92,8 @@ fun SettingsScreen(
                 defaultLabel = "Default chime",
                 onPick = pickNotificationSound,
                 onReset = viewModel::resetNotificationSound,
+                gainDb = state.notificationGainDb,
+                onGainChange = viewModel::setNotificationGainDb,
                 showThirtySecondHint = false,
             )
             SoundSection(
@@ -99,6 +103,8 @@ fun SettingsScreen(
                 defaultLabel = "Default alarm tone",
                 onPick = pickAlarmSound,
                 onReset = viewModel::resetAlarmSound,
+                gainDb = state.alarmGainDb,
+                onGainChange = viewModel::setAlarmGainDb,
                 showThirtySecondHint = true,
             )
             Text(
@@ -231,6 +237,8 @@ private fun SoundSection(
     defaultLabel: String,
     onPick: () -> Unit,
     onReset: () -> Unit,
+    gainDb: Float,
+    onGainChange: (Float) -> Unit,
     showThirtySecondHint: Boolean,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -259,6 +267,9 @@ private fun SoundSection(
                 )
             }
         }
+        if (currentSound != null) {
+            VolumeBoostControl(gainDb = gainDb, onGainChange = onGainChange)
+        }
         Button(onClick = onPick, modifier = Modifier.fillMaxWidth()) {
             Text("Pick a .wav file")
         }
@@ -276,5 +287,42 @@ private fun SoundSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+@Composable
+private fun VolumeBoostControl(
+    gainDb: Float,
+    onGainChange: (Float) -> Unit,
+) {
+    val rounded = gainDb.roundToInt()
+    val valueLabel = if (rounded == 0) "Normal (auto-normalized)" else "+$rounded dB"
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Volume boost",
+                style = MaterialTheme.typography.labelLarge,
+            )
+            Text(
+                text = valueLabel,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Slider(
+            value = gainDb,
+            onValueChange = onGainChange,
+            valueRange = 0f..12f,
+            steps = 11,
+        )
+        Text(
+            text = "Imported sounds are auto-normalized. Use this to push further.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

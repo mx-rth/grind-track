@@ -13,7 +13,14 @@ import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private val WAV_MIME_TYPES = arrayOf("audio/wav", "audio/x-wav", "audio/wave")
+private val WAV_MIME_TYPES = arrayOf(
+    "audio/wav",
+    "audio/x-wav",
+    "audio/wave",
+    "audio/vnd.wave",
+    "audio/*",
+    "application/octet-stream",
+)
 
 @Composable
 actual fun rememberSoundFilePicker(
