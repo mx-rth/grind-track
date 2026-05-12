@@ -585,7 +585,8 @@ private fun RestingControls(
     val restLabelPrefix = if (phase.isInterSideRest) "Rest before next side" else "Rest"
     val timerLabel = when {
         phase.remainingSeconds > 0 -> "$restLabelPrefix: ${phase.remainingSeconds}s"
-        else -> "$restLabelPrefix complete"
+        phase.totalSeconds > 0 -> "$restLabelPrefix complete"
+        else -> null
     }
     val continueLabel = when {
         phase.isInterSideRest && phase.isLogged -> "Continue to next side"
@@ -606,16 +607,18 @@ private fun RestingControls(
                 textAlign = TextAlign.Center,
             )
         }
-        Text(
-            text = timerLabel,
-            style = MaterialTheme.typography.titleLarge,
-            color = if (phase.remainingSeconds > 0)
-                MaterialTheme.colorScheme.primary
-            else
-                MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Center,
-        )
+        if (timerLabel != null) {
+            Text(
+                text = timerLabel,
+                style = MaterialTheme.typography.titleLarge,
+                color = if (phase.remainingSeconds > 0)
+                    MaterialTheme.colorScheme.primary
+                else
+                    MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+            )
+        }
         when (type) {
             ExerciseType.STRENGTH -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(

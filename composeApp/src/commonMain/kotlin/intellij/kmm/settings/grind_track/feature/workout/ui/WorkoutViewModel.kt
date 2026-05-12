@@ -167,10 +167,12 @@ class WorkoutViewModel(
         val exercise = current.currentExercise ?: return
         val unilateral = exercise.exercise.unilateral
         val isFirstSide = unilateral && current.currentSideIndex == 0
-        val totalSeconds = if (isFirstSide) {
-            exercise.effectiveRestAfterFirstSideSeconds
-        } else {
-            exercise.effectiveRestSeconds
+        val isLastSetOfExercise =
+            current.currentSetIndex >= exercise.routineExercise.targetSets
+        val totalSeconds = when {
+            isFirstSide -> exercise.effectiveRestAfterFirstSideSeconds
+            isLastSetOfExercise -> 0
+            else -> exercise.effectiveRestSeconds
         }
         val side: Side? = current.currentSide
         val last = lastSubmitted[exercise.routineExercise.id to side] ?: LastEntry()
@@ -208,13 +210,15 @@ class WorkoutViewModel(
             side = side,
             isInterSideRest = isFirstSide,
         )
-        val alarmName = if (side != null) {
-            "${exercise.exercise.name} — ${sideLabel(side)}"
-        } else {
-            exercise.exercise.name
+        if (totalSeconds > 0) {
+            val alarmName = if (side != null) {
+                "${exercise.exercise.name} — ${sideLabel(side)}"
+            } else {
+                exercise.exercise.name
+            }
+            restTimerAlarm.schedule(totalSeconds, exerciseName = alarmName)
+            startTimer(totalSeconds)
         }
-        restTimerAlarm.schedule(totalSeconds, exerciseName = alarmName)
-        startTimer(totalSeconds)
     }
 
     /** Begin a stopwatch in the current Working phase (TIME exercises only). */
@@ -348,6 +352,13 @@ class WorkoutViewModel(
                 LastEntry(weight = weight, reps = reps, distance = distance, duration = duration)
             val stillResting = phase.value as? Phase.Resting ?: return@launch
             phase.value = stillResting.copy(isLogged = true)
+
+            val isFirstSide = exercise.exercise.unilateral && current.currentSideIndex == 0
+            val isLastSetOfExercise =
+                current.currentSetIndex >= exercise.routineExercise.targetSets
+            if (isLastSetOfExercise && !isFirstSide) {
+                advanceFrom(current)
+            }
         }
     }
 
