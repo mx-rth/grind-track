@@ -323,7 +323,7 @@ class WorkoutViewModel(
         val (weight, reps, distance, duration) = when (exercise.exercise.type) {
             ExerciseType.STRENGTH -> {
                 val w = resting.weightDraft.toDoubleOrNull() ?: return
-                val r = resting.repsDraft.toIntOrNull()?.takeIf { it > 0 } ?: return
+                val r = resting.repsDraft.toIntOrNull()?.takeIf { it >= 0 } ?: return
                 if (w < 0.0) return
                 LastEntry(weight = w, reps = r)
             }

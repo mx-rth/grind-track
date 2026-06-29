@@ -736,7 +736,7 @@ private fun isSubmittable(phase: Phase.Resting, type: ExerciseType): Boolean = w
     ExerciseType.STRENGTH -> {
         val w = phase.weightDraft.toDoubleOrNull()
         val r = phase.repsDraft.toIntOrNull()
-        w != null && w >= 0.0 && r != null && r > 0
+        w != null && w >= 0.0 && r != null && r >= 0
     }
     ExerciseType.DISTANCE -> {
         val d = phase.distanceDraft.toIntOrNull()
