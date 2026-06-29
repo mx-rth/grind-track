@@ -3,7 +3,7 @@ package intellij.kmm.settings.grind_track.core.database.entity
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import kotlinx.datetime.DayOfWeek
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 @Entity(tableName = "routine")
 data class Routine(

@@ -19,11 +19,6 @@ object WavAmplifier {
         applyGain(out, parsed, additionalGainDb) ?: wavBytes
     }.getOrElse { wavBytes }
 
-    /** True when amplify() will actually process the file. False → unsupported format. */
-    fun isProcessable(wavBytes: ByteArray): Boolean = runCatching {
-        parse(wavBytes) != null
-    }.getOrElse { false }
-
     private data class Fmt(
         val audioFormat: Int,
         val numChannels: Int,
@@ -38,14 +33,14 @@ object WavAmplifier {
 
     private fun parse(bytes: ByteArray): Parsed? {
         if (bytes.size < 44) return null
-        if (readAscii(bytes, 0, 4) != "RIFF") return null
-        if (readAscii(bytes, 8, 4) != "WAVE") return null
+        if (readAscii(bytes, 0) != "RIFF") return null
+        if (readAscii(bytes, 8) != "WAVE") return null
 
         var offset = 12
         var fmt: Fmt? = null
 
         while (offset + 8 <= bytes.size) {
-            val chunkId = readAscii(bytes, offset, 4)
+            val chunkId = readAscii(bytes, offset)
             val chunkSize = readU32LE(bytes, offset + 4)
             val payloadOffset = offset + 8
 
@@ -83,8 +78,8 @@ object WavAmplifier {
     }
 
     private fun applyGain(out: ByteArray, p: Parsed, additionalGainDb: Float): ByteArray? {
-        val extraGain = 10.0.pow((additionalGainDb / 20.0).toDouble()).toFloat()
-        val peak = computePeakLinear(out, p) ?: return null
+        val extraGain = 10.0.pow(additionalGainDb / 20.0).toFloat()
+        val peak = computePeakLinear(out, p)
         if (peak <= 0f) return null
         val totalGain = (TARGET_PEAK_LINEAR_F / peak) * extraGain
         if (totalGain in 0.999f..1.001f) return out
@@ -92,7 +87,7 @@ object WavAmplifier {
         return out
     }
 
-    private fun computePeakLinear(bytes: ByteArray, p: Parsed): Float? {
+    private fun computePeakLinear(bytes: ByteArray, p: Parsed): Float {
         val fmt = p.fmt
         val end = p.dataOffset + p.dataLength
         var peak = 0f
@@ -229,9 +224,9 @@ object WavAmplifier {
         return x - (4f / 27f) * x * x * x
     }
 
-    private fun readAscii(b: ByteArray, offset: Int, len: Int): String {
-        val sb = StringBuilder(len)
-        for (n in 0 until len) sb.append((b[offset + n].toInt() and 0xFF).toChar())
+    private fun readAscii(b: ByteArray, offset: Int): String {
+        val sb = StringBuilder(4)
+        for (n in 0 until 4) sb.append((b[offset + n].toInt() and 0xFF).toChar())
         return sb.toString()
     }
 

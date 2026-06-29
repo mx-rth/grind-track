@@ -23,7 +23,6 @@ object BrandColors {
     val Electric = Color(0xFF3D5AFE)
     val ElectricSoft = Color(0xFFC8D1FF)
     val Cyan = Color(0xFF5BCED9)
-    val CyanSoft = Color(0xFFC8EEF2)
     val Magenta = Color(0xFFA93D70)
     val MagentaSoft = Color(0xFFF7C8DB)
     val InkNavy = Color(0xFF1F2933)
@@ -31,7 +30,6 @@ object BrandColors {
     val Slate = Color(0xFF5C6B7A)
     val SlateSoft = Color(0xFFD9DEE3)
     val Cream = Color(0xFFF5F4ED)
-    val CreamWarm = Color(0xFFFFFBEC)
     val MintFresh = Color(0xFF8AE6B6)
 }
 

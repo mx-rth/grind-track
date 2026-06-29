@@ -10,6 +10,7 @@ import intellij.kmm.settings.grind_track.core.database.entity.ExerciseType
 import intellij.kmm.settings.grind_track.core.database.entity.Routine
 import intellij.kmm.settings.grind_track.core.database.entity.Side
 import intellij.kmm.settings.grind_track.core.database.entity.WorkoutSession
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -65,12 +66,6 @@ sealed interface WorkoutUiState {
     ) : WorkoutUiState {
         val currentExercise: RoutineExerciseWithExercise?
             get() = exercises.getOrNull(currentExerciseIndex)
-
-        val isLastSetOfExercise: Boolean
-            get() = currentSetIndex >= (currentExercise?.routineExercise?.targetSets ?: 0)
-
-        val isLastExercise: Boolean
-            get() = currentExerciseIndex >= exercises.lastIndex
 
         /** Current side, or null when the exercise is not unilateral. */
         val currentSide: Side?
@@ -233,7 +228,7 @@ class WorkoutViewModel(
         stopwatchJob = viewModelScope.launch {
             val startMs = kotlin.time.Clock.System.now().toEpochMilliseconds()
             while (true) {
-                delay(100)
+                delay(100.milliseconds)
                 val elapsed = (kotlin.time.Clock.System.now().toEpochMilliseconds() - startMs) / 1000.0
                 val cur = phase.value as? Phase.Working ?: return@launch
                 phase.value = cur.copy(stopwatchElapsed = elapsed)
@@ -270,7 +265,7 @@ class WorkoutViewModel(
         countdownJob = viewModelScope.launch {
             val startMs = kotlin.time.Clock.System.now().toEpochMilliseconds()
             while (true) {
-                delay(100)
+                delay(100.milliseconds)
                 val elapsed = (kotlin.time.Clock.System.now().toEpochMilliseconds() - startMs) / 1000.0
                 val remaining = (target - elapsed).coerceAtLeast(0.0)
                 val cur = phase.value as? Phase.Working ?: return@launch

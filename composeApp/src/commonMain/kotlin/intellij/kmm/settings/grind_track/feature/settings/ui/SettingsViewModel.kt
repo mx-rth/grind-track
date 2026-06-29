@@ -9,6 +9,7 @@ import intellij.kmm.settings.grind_track.core.notifications.CustomSoundManager
 import intellij.kmm.settings.grind_track.core.preferences.MascotPreference
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +29,7 @@ data class SettingsUiState(
     val alarmGainDb: Float = 0f,
 )
 
+@OptIn(FlowPreview::class)
 class SettingsViewModel(
     private val notificationSoundManager: CustomSoundManager,
     private val alarmSoundManager: CustomSoundManager,

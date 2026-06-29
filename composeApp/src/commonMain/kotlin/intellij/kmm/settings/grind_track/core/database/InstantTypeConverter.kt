@@ -1,7 +1,7 @@
 package intellij.kmm.settings.grind_track.core.database
 
 import androidx.room.TypeConverter
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 class InstantTypeConverter {
     @TypeConverter

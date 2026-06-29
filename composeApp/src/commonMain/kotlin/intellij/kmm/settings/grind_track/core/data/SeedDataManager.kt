@@ -14,7 +14,7 @@ import intellij.kmm.settings.grind_track.core.database.entity.Side
 import intellij.kmm.settings.grind_track.core.database.entity.WorkoutSession
 import kotlinx.coroutines.flow.first
 import kotlinx.datetime.DayOfWeek
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlin.time.Duration.Companion.minutes
 
 class SeedDataManager(

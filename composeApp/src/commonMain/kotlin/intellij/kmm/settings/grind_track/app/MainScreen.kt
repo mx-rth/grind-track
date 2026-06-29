@@ -33,8 +33,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -42,6 +40,7 @@ import androidx.navigation.compose.rememberNavController
 import grind_track.composeapp.generated.resources.Res
 import grind_track.composeapp.generated.resources.ic_flame
 import intellij.kmm.settings.grind_track.feature.progress.ui.CelebrationEvent
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.viewmodel.koinViewModel
@@ -68,7 +67,7 @@ private fun MainScreenScaffold(
 
     LaunchedEffect(currentEvent) {
         if (currentEvent != null) {
-            delay(4_000)
+            delay(4.seconds)
             celebrationVm.dismiss()
         }
     }

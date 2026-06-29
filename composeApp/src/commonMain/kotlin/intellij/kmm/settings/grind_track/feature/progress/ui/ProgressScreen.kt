@@ -28,9 +28,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -140,8 +138,8 @@ fun ProgressScreen(
                     if (!state.isLoading) {
                         androidx.compose.material3.Surface(
                             shape = androidx.compose.foundation.shape.CircleShape,
-                            color = androidx.compose.ui.graphics.Color(0xFFFFE0CC),
-                            contentColor = androidx.compose.ui.graphics.Color(0xFF8C2A00),
+                            color = Color(0xFFFFE0CC),
+                            contentColor = Color(0xFF8C2A00),
                             modifier = Modifier.padding(end = 12.dp),
                         ) {
                             Row(

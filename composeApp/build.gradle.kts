@@ -10,6 +10,12 @@ plugins {
 }
 
 kotlin {
+    compilerOptions {
+        // expect/actual classes are intentional here (RestTimerAlarm, DatabaseFactory,
+        // SettingsStore, etc.); opt in to silence the KT-61573 Beta warning.
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
+
     androidTarget {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_11)

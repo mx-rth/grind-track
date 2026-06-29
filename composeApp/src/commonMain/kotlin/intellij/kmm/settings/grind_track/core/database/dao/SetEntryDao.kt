@@ -7,9 +7,8 @@ import androidx.room.Query
 import intellij.kmm.settings.grind_track.core.database.entity.Exercise
 import intellij.kmm.settings.grind_track.core.database.entity.ExerciseType
 import intellij.kmm.settings.grind_track.core.database.entity.SetEntry
-import intellij.kmm.settings.grind_track.core.database.entity.Side
 import kotlinx.coroutines.flow.Flow
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 data class SetEntryRow(
     val exerciseId: Long,
