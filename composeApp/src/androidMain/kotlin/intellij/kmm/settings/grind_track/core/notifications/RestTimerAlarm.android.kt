@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.getSystemService
 
 private const val REQUEST_CODE_INITIAL = 0x6711
@@ -77,16 +78,27 @@ actual class RestTimerAlarm(
     }
 
     actual fun cancel() {
-        val manager = alarmManager ?: return
-        cancelOne(manager, REQUEST_CODE_INITIAL, ACTION_REST_DONE)
-        cancelOne(manager, REQUEST_CODE_FOLLOWUP, ACTION_REST_FOLLOWUP_DONE)
-        cancelOne(manager, REQUEST_CODE_NOTIFICATION_ONLY, ACTION_COUNTDOWN_DONE)
+        // Dismiss any notifications already delivered to the shade. Cancelling the
+        // AlarmManager triggers below only stops *future* alarms; once
+        // RestTimerReceiver has posted a notification it lingers in the notification
+        // center until explicitly removed. The request codes double as the
+        // notification IDs used by RestTimerReceiver / RestAlarmPlaybackService.
+        NotificationManagerCompat.from(context).apply {
+            cancel(REQUEST_CODE_INITIAL)
+            cancel(REQUEST_CODE_FOLLOWUP)
+            cancel(REQUEST_CODE_NOTIFICATION_ONLY)
+        }
         // Stop the looping playback service if a custom alarm is currently sounding.
         // runCatching guards against background-start restrictions when called from a
         // non-foreground context (alarms cancelled while the app isn't visible).
         val stopIntent = Intent(context, RestAlarmPlaybackService::class.java)
             .setAction(ACTION_STOP_PLAYBACK)
         runCatching { context.startService(stopIntent) }
+
+        val manager = alarmManager ?: return
+        cancelOne(manager, REQUEST_CODE_INITIAL, ACTION_REST_DONE)
+        cancelOne(manager, REQUEST_CODE_FOLLOWUP, ACTION_REST_FOLLOWUP_DONE)
+        cancelOne(manager, REQUEST_CODE_NOTIFICATION_ONLY, ACTION_COUNTDOWN_DONE)
     }
 
     private fun scheduleExact(manager: AlarmManager, triggerAt: Long, pi: PendingIntent) {
