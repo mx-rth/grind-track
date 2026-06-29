@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,6 +25,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
@@ -50,6 +54,7 @@ fun WorkoutScreen(
     viewModel: WorkoutViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var pendingFinish by remember { mutableStateOf<FinishKind?>(null) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -66,7 +71,7 @@ fun WorkoutScreen(
                 },
                 actions = {
                     if (state is WorkoutUiState.InSession) {
-                        TextButton(onClick = viewModel::finishSession) { Text("Finish") }
+                        TextButton(onClick = { pendingFinish = FinishKind.Finish }) { Text("Finish") }
                     }
                 },
                 colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
@@ -89,15 +94,68 @@ fun WorkoutScreen(
                     onUpdateRestForm = viewModel::updateRestForm,
                     onLogSet = viewModel::logSet,
                     onContinueToNext = viewModel::continueToNext,
-                    onFinish = viewModel::finishSession,
+                    onFinish = { pendingFinish = FinishKind.Abandon },
                     onStartStopwatch = viewModel::startStopwatch,
                     onStopStopwatch = viewModel::stopStopwatch,
                     onStartCountdown = viewModel::startCountdown,
                     onCancelCountdown = viewModel::cancelCountdown,
                 )
             }
+
+            pendingFinish?.let { kind ->
+                FinishConfirmDialog(
+                    kind = kind,
+                    onConfirm = {
+                        pendingFinish = null
+                        viewModel.finishSession()
+                    },
+                    onDismiss = { pendingFinish = null },
+                )
+            }
         }
     }
+}
+
+private enum class FinishKind { Finish, Abandon }
+
+@Composable
+private fun FinishConfirmDialog(
+    kind: FinishKind,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val (title, body, confirmLabel) = when (kind) {
+        FinishKind.Finish -> Triple(
+            "Finish workout?",
+            "End this workout session now? Sets you've already logged stay saved.",
+            "Finish",
+        )
+        FinishKind.Abandon -> Triple(
+            "Abandon workout?",
+            "End this workout now and skip the rest of the routine? Sets you've already logged stay saved.",
+            "Abandon",
+        )
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(body) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(
+                    confirmLabel,
+                    color = if (kind == FinishKind.Abandon) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Keep going") }
+        },
+    )
 }
 
 @Composable
