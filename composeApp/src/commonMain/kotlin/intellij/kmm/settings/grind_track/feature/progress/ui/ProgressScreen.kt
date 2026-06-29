@@ -468,11 +468,16 @@ private fun HistoryList(
                     }
                 val hasUnilateral = history.any { it.side != null }
                 val repsBySession: List<RepsBarData> = sessionGroups.mapIndexed { i, (_, entries) ->
+                    val leftEntries = entries.filter { it.side == Side.LEFT }
+                    val rightEntries = entries.filter { it.side == Side.RIGHT }
                     RepsBarData(
                         label = sessionLabels[i],
                         total = entries.sumOf { it.reps },
-                        leftReps = entries.filter { it.side == Side.LEFT }.sumOf { it.reps },
-                        rightReps = entries.filter { it.side == Side.RIGHT }.sumOf { it.reps },
+                        firstSet = entries.firstOrNull()?.reps ?: 0,
+                        leftTotal = leftEntries.sumOf { it.reps },
+                        rightTotal = rightEntries.sumOf { it.reps },
+                        leftFirstSet = leftEntries.firstOrNull()?.reps ?: 0,
+                        rightFirstSet = rightEntries.firstOrNull()?.reps ?: 0,
                     )
                 }
                 if (!hideWeightChart) {
@@ -484,7 +489,7 @@ private fun HistoryList(
                     }
                 }
                 item(key = "reps_chart_section") {
-                    SectionHeader(text = "Reps per session", accent = BrandColors.Electric)
+                    SectionHeader(text = "Reps", accent = BrandColors.Electric)
                 }
                 item(key = "reps_chart") {
                     RepsBarChart(dataPoints = repsBySession, hasUnilateral = hasUnilateral)
@@ -683,13 +688,20 @@ private fun WeightProgressionChart(dataPoints: List<Pair<String, List<Double>>>)
 private data class RepsBarData(
     val label: String,
     val total: Int,
-    val leftReps: Int,
-    val rightReps: Int,
-)
+    val firstSet: Int,
+    val leftTotal: Int,
+    val rightTotal: Int,
+    val leftFirstSet: Int,
+    val rightFirstSet: Int,
+) {
+    fun single(mode: RepsMode) = if (mode == RepsMode.FirstSet) firstSet else total
+    fun left(mode: RepsMode) = if (mode == RepsMode.FirstSet) leftFirstSet else leftTotal
+    fun right(mode: RepsMode) = if (mode == RepsMode.FirstSet) rightFirstSet else rightTotal
+}
 
 private enum class RepsMode(val label: String) {
     Total("Total"),
-    BySide("By side"),
+    FirstSet("First Set"),
 }
 
 @Composable
@@ -701,19 +713,19 @@ private fun RepsBarChart(dataPoints: List<RepsBarData>, hasUnilateral: Boolean) 
     val leftSideColor = Color(0xFFE53935)
     val rightSideColor = Color(0xFF1E88E5)
 
-    var mode by remember(hasUnilateral) {
-        mutableStateOf(if (hasUnilateral) RepsMode.BySide else RepsMode.Total)
-    }
+    var mode by remember { mutableStateOf(RepsMode.FirstSet) }
     var dropdownExpanded by remember { mutableStateOf(false) }
 
     val n = dataPoints.size
-    val maxReps = if (n == 0) 0 else when (mode) {
-        RepsMode.Total -> dataPoints.maxOf { it.total }
-        RepsMode.BySide -> dataPoints.maxOf { maxOf(it.leftReps, it.rightReps) }
+    val maxReps = if (n == 0) 0 else if (hasUnilateral) {
+        dataPoints.maxOf { maxOf(it.left(mode), it.right(mode)) }
+    } else {
+        dataPoints.maxOf { it.single(mode) }
     }
-    val minReps = if (n == 0) 0 else when (mode) {
-        RepsMode.Total -> dataPoints.minOf { it.total }
-        RepsMode.BySide -> dataPoints.minOf { minOf(it.leftReps, it.rightReps) }
+    val minReps = if (n == 0) 0 else if (hasUnilateral) {
+        dataPoints.minOf { minOf(it.left(mode), it.right(mode)) }
+    } else {
+        dataPoints.minOf { it.single(mode) }
     }
     val rangePad = if (maxReps == minReps) maxReps * 0.15f else (maxReps - minReps) * 0.15f
     val displayMin = (minReps - rangePad).coerceAtLeast(0f)
@@ -727,30 +739,28 @@ private fun RepsBarChart(dataPoints: List<RepsBarData>, hasUnilateral: Boolean) 
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Reps per Session", style = MaterialTheme.typography.titleSmall)
-                if (hasUnilateral) {
-                    Box {
-                        TextButton(
-                            onClick = { dropdownExpanded = true },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                        ) {
-                            Text(mode.label, style = MaterialTheme.typography.labelMedium)
-                        }
-                        DropdownMenu(
-                            expanded = dropdownExpanded,
-                            onDismissRequest = { dropdownExpanded = false },
-                        ) {
-                            RepsMode.entries.forEach { m ->
-                                DropdownMenuItem(
-                                    text = { Text(m.label) },
-                                    onClick = { mode = m; dropdownExpanded = false },
-                                )
-                            }
+                Text("Reps", style = MaterialTheme.typography.titleSmall)
+                Box {
+                    TextButton(
+                        onClick = { dropdownExpanded = true },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    ) {
+                        Text(mode.label, style = MaterialTheme.typography.labelMedium)
+                    }
+                    DropdownMenu(
+                        expanded = dropdownExpanded,
+                        onDismissRequest = { dropdownExpanded = false },
+                    ) {
+                        RepsMode.entries.forEach { m ->
+                            DropdownMenuItem(
+                                text = { Text(m.label) },
+                                onClick = { mode = m; dropdownExpanded = false },
+                            )
                         }
                     }
                 }
             }
-            if (mode == RepsMode.BySide) {
+            if (hasUnilateral) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     LegendDot(color = leftSideColor, label = "Left")
                     LegendDot(color = rightSideColor, label = "Right")
@@ -789,45 +799,41 @@ private fun RepsBarChart(dataPoints: List<RepsBarData>, hasUnilateral: Boolean) 
 
                 for (i in 0 until n) {
                     val cx = leftPad + i * slotWidth + slotWidth / 2f
-                    when (mode) {
-                        RepsMode.Total -> {
-                            val frac = ((dataPoints[i].total - displayMin) / range).coerceIn(0f, 1f)
-                            val barHeight = (ch * frac).coerceAtLeast(2.dp.toPx())
+                    if (hasUnilateral) {
+                        val gap = 2.dp.toPx()
+                        val singleWidth = (groupWidth - gap) / 2f
+                        val leftReps = dataPoints[i].left(mode)
+                        val rightReps = dataPoints[i].right(mode)
+                        val leftFrac = ((leftReps - displayMin) / range).coerceIn(0f, 1f)
+                        val rightFrac = ((rightReps - displayMin) / range).coerceIn(0f, 1f)
+                        val leftHeight = if (leftReps > 0) (ch * leftFrac).coerceAtLeast(2.dp.toPx()) else 0f
+                        val rightHeight = if (rightReps > 0) (ch * rightFrac).coerceAtLeast(2.dp.toPx()) else 0f
+                        if (leftHeight > 0f) {
                             drawRoundRect(
-                                color = secondaryColor,
-                                topLeft = Offset(cx - groupWidth / 2f, topPad + ch - barHeight),
-                                size = Size(groupWidth, barHeight),
+                                color = leftSideColor,
+                                topLeft = Offset(cx - groupWidth / 2f, topPad + ch - leftHeight),
+                                size = Size(singleWidth, leftHeight),
                                 cornerRadius = cornerRadius,
                             )
                         }
-                        RepsMode.BySide -> {
-                            val gap = 2.dp.toPx()
-                            val singleWidth = (groupWidth - gap) / 2f
-                            val leftFrac = ((dataPoints[i].leftReps - displayMin) / range).coerceIn(0f, 1f)
-                            val rightFrac = ((dataPoints[i].rightReps - displayMin) / range).coerceIn(0f, 1f)
-                            val leftHeight = if (dataPoints[i].leftReps > 0)
-                                (ch * leftFrac).coerceAtLeast(2.dp.toPx())
-                            else 0f
-                            val rightHeight = if (dataPoints[i].rightReps > 0)
-                                (ch * rightFrac).coerceAtLeast(2.dp.toPx())
-                            else 0f
-                            if (leftHeight > 0f) {
-                                drawRoundRect(
-                                    color = leftSideColor,
-                                    topLeft = Offset(cx - groupWidth / 2f, topPad + ch - leftHeight),
-                                    size = Size(singleWidth, leftHeight),
-                                    cornerRadius = cornerRadius,
-                                )
-                            }
-                            if (rightHeight > 0f) {
-                                drawRoundRect(
-                                    color = rightSideColor,
-                                    topLeft = Offset(cx - groupWidth / 2f + singleWidth + gap, topPad + ch - rightHeight),
-                                    size = Size(singleWidth, rightHeight),
-                                    cornerRadius = cornerRadius,
-                                )
-                            }
+                        if (rightHeight > 0f) {
+                            drawRoundRect(
+                                color = rightSideColor,
+                                topLeft = Offset(cx - groupWidth / 2f + singleWidth + gap, topPad + ch - rightHeight),
+                                size = Size(singleWidth, rightHeight),
+                                cornerRadius = cornerRadius,
+                            )
                         }
+                    } else {
+                        val value = dataPoints[i].single(mode)
+                        val frac = ((value - displayMin) / range).coerceIn(0f, 1f)
+                        val barHeight = (ch * frac).coerceAtLeast(2.dp.toPx())
+                        drawRoundRect(
+                            color = secondaryColor,
+                            topLeft = Offset(cx - groupWidth / 2f, topPad + ch - barHeight),
+                            size = Size(groupWidth, barHeight),
+                            cornerRadius = cornerRadius,
+                        )
                     }
                     if (i % labelStep == 0) {
                         val measured = textMeasurer.measure(dataPoints[i].label, TextStyle(fontSize = 9.sp))
